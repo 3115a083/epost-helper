@@ -62,7 +62,9 @@ public final class Sender {
     }
 
     private static void sendIpp(OkHttpClient client, String httpsUrl, byte[] pdf, Profile p) throws Exception {
-        byte[] head = IppEncoder.printJobHeader(p.url.trim(), p.username, "E-POST Helper");
+        String printerUri = p.url.trim();
+        if (printerUri.startsWith("https://")) printerUri = "ipps://" + printerUri.substring("https://".length());
+        byte[] head = IppEncoder.printJobHeader(printerUri, p.username, "E-POST Helper");
         byte[] body = new byte[head.length + pdf.length];
         System.arraycopy(head,0,body,0,head.length); System.arraycopy(pdf,0,body,head.length,pdf.length);
         Request req = auth(new Request.Builder().url(httpsUrl), p).post(RequestBody.create(body, IPP))
