@@ -1,6 +1,8 @@
 package de.eposthelper.app;
 
 import android.net.Uri;
+import android.os.Handler;
+import android.os.Looper;
 import android.os.ParcelFileDescriptor;
 import android.print.PrintAttributes;
 import android.print.PrinterCapabilitiesInfo;
@@ -18,6 +20,8 @@ import java.util.List;
 import java.util.concurrent.Executors;
 
 public class EPostPrintService extends PrintService {
+    private final Handler main = new Handler(Looper.getMainLooper());
+
     @Override protected PrinterDiscoverySession onCreatePrinterDiscoverySession(){
         return new PrinterDiscoverySession(){
             @Override public void onStartPrinterDiscovery(List<PrinterId> priorityList){publish();}
@@ -51,19 +55,22 @@ public class EPostPrintService extends PrintService {
     @Override protected void onPrintJobQueued(PrintJob printJob){
         Profile profile=SecureStore.find(this,printJob.getInfo().getPrinterId().getLocalId());
         if(profile==null){printJob.fail("Versandprofil nicht gefunden");return;}
+        ParcelFileDescriptor pfd=printJob.getDocument().getData();
+        if(pfd==null){printJob.fail("Druckdaten fehlen");return;}
         printJob.start();
+
         Executors.newSingleThreadExecutor().execute(()->{
             File tmp=null;
             try{
-                ParcelFileDescriptor pfd=printJob.getDocument().getData();
-                if(pfd==null) throw new IllegalStateException("Druckdaten fehlen");
                 tmp=File.createTempFile("epost-print-",".pdf",getCacheDir());
                 try(InputStream in=new ParcelFileDescriptor.AutoCloseInputStream(pfd); FileOutputStream out=new FileOutputStream(tmp)){
                     byte[] buf=new byte[64*1024]; int n; while((n=in.read(buf))>=0) out.write(buf,0,n);
                 }
-                Sender.send(this,Uri.fromFile(tmp),profile); printJob.complete();
+                Sender.send(this,Uri.fromFile(tmp),profile);
+                main.post(printJob::complete);
             }catch(Exception e){
-                printJob.fail("E-POST-Versand fehlgeschlagen: "+e.getMessage());
+                String message="E-POST-Versand fehlgeschlagen: "+e.getMessage();
+                main.post(()->printJob.fail(message));
             }finally{if(tmp!=null) tmp.delete();}
         });
     }
