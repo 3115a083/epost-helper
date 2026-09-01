@@ -1,4 +1,7 @@
 <resources>
     <color name="epost_yellow">#FFCC00</color>
     <color name="epost_blue">#2457E6</color>
+    <color name="epost_blue_deep">#153AAE</color>
+    <color name="epost_green">#16B877</color>
+    <color name="epost_violet">#7258E8</color>
 </resources>
