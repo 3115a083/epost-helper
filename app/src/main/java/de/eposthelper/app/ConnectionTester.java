@@ -33,7 +33,7 @@ public final class ConnectionTester {
                 .header("Depth","0").build();
         try(Response r=client.newCall(probe).execute()){
             if(!(r.code()==207||r.isSuccessful())) {
-                if(r.code()==401) throw new IllegalStateException(authError("WebDAV",r));
+                if(r.code()==401) throw new IllegalStateException(describe401("WebDAV",r));
                 throw new IllegalStateException("WebDAV antwortet mit HTTP "+r.code());
             }
         }
@@ -60,7 +60,7 @@ public final class ConnectionTester {
                 .post(RequestBody.create(request,IPP)).header("Content-Type","application/ipp").build();
         try(Response r=client.newCall(req).execute()){
             if(!r.isSuccessful()) {
-                if(r.code()==401) throw new IllegalStateException(authError("IPP",r));
+                if(r.code()==401) throw new IllegalStateException(describe401("IPP",r));
                 throw new IllegalStateException("IPP-Ziel antwortet mit HTTP "+r.code());
             }
             byte[] body=r.body()==null?new byte[0]:r.body().bytes();
@@ -71,7 +71,7 @@ public final class ConnectionTester {
         return "Netzwerkdrucker erreichbar\nIPP-Verbindung und Authentifizierung wurden erfolgreich geprüft.";
     }
 
-    private static String authError(String kind,Response r){
+    public static String describe401(String kind,Response r){
         String challenge=r.header("WWW-Authenticate","");
         String hint=kind+" meldet HTTP 401. ";
         if(!challenge.isBlank()) hint+="Server-Challenge: "+challenge+". ";
