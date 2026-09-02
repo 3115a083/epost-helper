@@ -1,10 +1,10 @@
 package de.eposthelper.app;
 
-import android.app.Activity;
 import android.content.res.Configuration;
 import android.view.View;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
+import androidx.activity.ComponentActivity;
 import androidx.activity.EdgeToEdge;
 import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;
@@ -13,7 +13,7 @@ import androidx.core.view.WindowInsetsControllerCompat;
 public final class SystemUi {
     private SystemUi(){}
 
-    public static void apply(Activity activity, View root){
+    public static void apply(ComponentActivity activity, View root){
         EdgeToEdge.enable(activity);
         ViewCompat.setOnApplyWindowInsetsListener(root,(v,insets)->{
             Insets bars=insets.getInsets(WindowInsetsCompat.Type.systemBars());
