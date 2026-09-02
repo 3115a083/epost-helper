@@ -36,6 +36,9 @@ public class MainActivity extends AppCompatActivity {
     private final ArrayDeque<Integer> tabHistory=new ArrayDeque<>();
     private long lastBackAt=0L;
     private boolean historyLoading=false;
+    private int vibeTapCount=0;
+    private long vibeTapWindowStart=0L;
+    private LinearLayout hiddenDebugBox;
     private List<RecentLetter> recentCache=new ArrayList<>();
 
     private final ActivityResultLauncher<Uri> folderPicker=registerForActivityResult(
@@ -55,6 +58,7 @@ public class MainActivity extends AppCompatActivity {
         SettingsStore.applySavedAppearance(this);
         super.onCreate(b);
         SettingsStore.applyDynamicColors(this);
+        DebugProfileManager.ensure(this);
         if(b!=null)currentTab=b.getInt("currentTab",0);
         Uri incoming=getIntent().getData();
         if(Intent.ACTION_VIEW.equals(getIntent().getAction())&&incoming!=null){
@@ -301,6 +305,7 @@ public class MainActivity extends AppCompatActivity {
     private void renderProfiles(){
         content.addView(section("Profile"));
         for(Profile p:SecureStore.load(this)){
+            if(DebugProfileManager.isDebug(p))continue;
             LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);
             LinearLayout head=new LinearLayout(this);head.setGravity(Gravity.CENTER_VERTICAL);
             ImageView icon=new ImageView(this);icon.setImageResource(Profile.PROVIDER_LETTERXPRESS.equals(p.provider)?R.drawable.ic_provider_lxp:R.drawable.ic_provider_post);
@@ -329,6 +334,22 @@ public class MainActivity extends AppCompatActivity {
             if(f!=null&&f.getName()!=null&&!f.getName().isBlank())return f.getName()+"\n"+uri;
         }catch(Exception ignored){}
         return uri;
+    }
+
+    private void handleVibeTap(){
+        long now=System.currentTimeMillis();
+        if(now-vibeTapWindowStart>3000){
+            vibeTapWindowStart=now;
+            vibeTapCount=0;
+        }
+        vibeTapCount++;
+        if(vibeTapCount<5)return;
+
+        vibeTapCount=0;
+        vibeTapWindowStart=0L;
+        DebugProfileManager.setEnabled(this,true);
+        if(hiddenDebugBox!=null)hiddenDebugBox.setVisibility(View.VISIBLE);
+        Snackbar.make(content,"Debugmodus aktiviert. Lokales Debug-Druckprofil wurde eingerichtet.",Snackbar.LENGTH_LONG).show();
     }
 
     private void renderSettings(){
@@ -392,21 +413,36 @@ public class MainActivity extends AppCompatActivity {
         TextView security=UiKit.body(this,"TLS-geschützte Übertragung, Zertifikatsprüfung und verschlüsselte lokale Zugangsdaten.");
         security.setTextSize(12);security.setPadding(0,UiKit.dp(this,14),0,UiKit.dp(this,18));content.addView(security);
 
-        content.addView(section("Debug"));
-        LinearLayout debugBox=new LinearLayout(this);debugBox.setOrientation(LinearLayout.VERTICAL);
+        hiddenDebugBox=new LinearLayout(this);
+        hiddenDebugBox.setOrientation(LinearLayout.VERTICAL);
+        hiddenDebugBox.setVisibility(SettingsStore.debugMode(this)?View.VISIBLE:View.GONE);
+        TextView debugTitle=section("Debug");
+        hiddenDebugBox.addView(debugTitle);
+
+        LinearLayout debugBody=new LinearLayout(this);debugBody.setOrientation(LinearLayout.VERTICAL);
         com.google.android.material.materialswitch.MaterialSwitch debug=new com.google.android.material.materialswitch.MaterialSwitch(this);
-        debug.setText("Debugmodus");debug.setChecked(SettingsStore.debugMode(this));
-        debug.setOnCheckedChangeListener((button,checked)->SettingsStore.setDebugMode(this,checked));debugBox.addView(debug);
-        TextView dh=UiKit.body(this,"Technische Fehler bleiben sichtbar und werden automatisch in die Zwischenablage kopiert.");
-        dh.setTextSize(13);debugBox.addView(dh);
-        content.addView(UiKit.surfaceCard(this,debugBox));
+        debug.setText("Debugmodus");
+        debug.setChecked(SettingsStore.debugMode(this));
+        debug.setOnCheckedChangeListener((button,checked)->{
+            DebugProfileManager.setEnabled(this,checked);
+            if(!checked){
+                hiddenDebugBox.setVisibility(View.GONE);
+                Snackbar.make(content,"Debugmodus deaktiviert.",Snackbar.LENGTH_SHORT).show();
+            }
+        });
+        debugBody.addView(debug);
+        TextView dh=UiKit.body(this,"Aktiviert technische Fehlerdetails und das lokale Debug-Druckprofil. Testdrucke werden im Unterordner „debug“ des Standardordners als PDF plus Textdatei gespeichert.");
+        dh.setTextSize(13);debugBody.addView(dh);
+        hiddenDebugBox.addView(UiKit.surfaceCard(this,debugBody));
+        content.addView(hiddenDebugBox);
 
         View footerGap=new View(this);
-        content.addView(footerGap,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,32)));
+        content.addView(footerGap,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,36)));
 
         TextView vibe=UiKit.heading(this,"Vibecoded with ❤️",14);
         vibe.setGravity(Gravity.CENTER);
         vibe.setAlpha(0.82f);
+        vibe.setOnClickListener(v->handleVibeTap());
         content.addView(vibe);
         TextView github=UiKit.body(this,"github.com/3115a083/epost-helper");
         github.setGravity(Gravity.CENTER);
