@@ -55,9 +55,15 @@ public class MainActivity extends AppCompatActivity {
         if(Intent.ACTION_VIEW.equals(getIntent().getAction())&&getIntent().getData()!=null){
             selectedPdf=getIntent().getData(); currentTab=1;
         }
+        if(b!=null) currentTab=b.getInt("currentTab",currentTab);
         buildShell();
         setupBackNavigation();
         render();
+    }
+
+    @Override protected void onSaveInstanceState(Bundle outState){
+        outState.putInt("currentTab",currentTab);
+        super.onSaveInstanceState(outState);
     }
 
     @Override protected void onResume(){
@@ -185,11 +191,6 @@ public class MainActivity extends AppCompatActivity {
         metrics.addView(metric("Dokument",selectedPdf==null?"Keins":"Bereit",selectedPdf==null?"PDF wählen":"versandbereit"),new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1f));
         content.addView(metrics);
 
-        content.addView(section("Schnellzugriff"));
-        content.addView(actionCard("▣","PDF senden","Dokument auswählen, Profil wählen und einliefern",()->navigateTo(1)));
-        content.addView(actionCard("▤","Profile verwalten","Sammelkorb oder Netzwerkdrucker einrichten",()->navigateTo(2)));
-        MaterialButton add=UiKit.primary(this,"+  Neues Profil"); add.setOnClickListener(v->startActivity(new Intent(this,ProfileEditActivity.class)));
-        LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,54)); lp.setMargins(0,UiKit.dp(this,12),0,0); content.addView(add,lp);
     }
 
     private MaterialCardView metric(String label,String value,String sub){
