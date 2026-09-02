@@ -2,6 +2,7 @@ package de.eposthelper.app;
 
 import android.content.Intent;
 import android.graphics.Bitmap;
+import android.graphics.RectF;
 import android.graphics.pdf.PdfRenderer;
 import android.net.Uri;
 import android.os.Bundle;
@@ -9,11 +10,14 @@ import android.os.ParcelFileDescriptor;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.ArrayAdapter;
+import android.widget.CheckBox;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.RadioButton;
 import android.widget.RadioGroup;
 import android.widget.ScrollView;
+import android.widget.Spinner;
 import android.widget.TextView;
 
 import androidx.activity.result.ActivityResultLauncher;
@@ -21,18 +25,35 @@ import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.google.android.material.button.MaterialButton;
+import com.google.android.material.materialswitch.MaterialSwitch;
 import com.google.android.material.snackbar.Snackbar;
 
 import java.io.File;
-import java.io.FileInputStream;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 public class OutboxActivity extends AppCompatActivity {
-    private LinearLayout root,queueBox,finalBox;
-    private List<OutboxItem> items=new ArrayList<>();
+    private LinearLayout root;
+    private int step=1;
+    private final Set<String> selectedIds=new HashSet<>();
+    private List<OutboxItem> allItems=new ArrayList<>();
+    private List<OutboxItem> working=new ArrayList<>();
     private File merged;
+    private Bitmap previewBitmap;
+
     private String selectedProfileId;
+    private MaterialSwitch color,duplex,localCorrection,c4;
+    private Spinner registered;
+    private AddressConfigView addressPreview;
+    private TextView layoutHint;
+    private RadioGroup profileGroup;
+    private LinearLayout profilePriceBox;
+
+    private RectF targetSender=AddressLayoutRules.normalSender();
+    private RectF targetRecipient=AddressLayoutRules.normalRecipient();
 
     private final ActivityResultLauncher<String[]> picker=registerForActivityResult(
             new ActivityResultContracts.OpenMultipleDocuments(),uris->{
@@ -42,7 +63,7 @@ public class OutboxActivity extends AppCompatActivity {
                     catch(Exception ignored){}
                     OutboxStore.add(this,uri,displayName(uri),false);
                 }
-                reload();
+                refreshItems();
             });
 
     @Override protected void onCreate(Bundle b){
@@ -55,7 +76,7 @@ public class OutboxActivity extends AppCompatActivity {
     @Override protected void onResume(){
         super.onResume();
         OutboxStore.importFolder(this);
-        reload();
+        refreshItems();
     }
 
     private String displayName(Uri uri){
@@ -67,143 +88,311 @@ public class OutboxActivity extends AppCompatActivity {
     }
 
     private void renderShell(){
-        LinearLayout page=new LinearLayout(this);page.setOrientation(LinearLayout.VERTICAL);page.setBackgroundColor(UiKit.resolveSurface(this));
-        LinearLayout top=new LinearLayout(this);top.setGravity(Gravity.CENTER_VERTICAL);top.setPadding(UiKit.dp(this,8),UiKit.dp(this,8),UiKit.dp(this,16),UiKit.dp(this,8));
-        TextView back=UiKit.heading(this,"‹",34);back.setGravity(Gravity.CENTER);back.setOnClickListener(v->getOnBackPressedDispatcher().onBackPressed());
+        LinearLayout page=new LinearLayout(this);
+        page.setOrientation(LinearLayout.VERTICAL);
+        page.setBackgroundColor(UiKit.resolveSurface(this));
+
+        LinearLayout top=new LinearLayout(this);
+        top.setGravity(Gravity.CENTER_VERTICAL);
+        top.setPadding(UiKit.dp(this,8),UiKit.dp(this,8),UiKit.dp(this,16),UiKit.dp(this,8));
+        TextView back=UiKit.heading(this,"‹",34);
+        back.setGravity(Gravity.CENTER);
+        back.setOnClickListener(v->back());
+        back.setContentDescription("Zurück");
         top.addView(back,new LinearLayout.LayoutParams(UiKit.dp(this,54),UiKit.dp(this,54)));
         top.addView(UiKit.heading(this,"Druckausgang",22),new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1f));
         page.addView(top);
 
         ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);
-        root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setPadding(UiKit.dp(this,18),0,UiKit.dp(this,18),UiKit.dp(this,28));
-        scroll.addView(root);page.addView(scroll,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,0,1f));
-        setContentView(page);SystemUi.apply(this,page);
-        reload();
+        root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);
+        root.setPadding(UiKit.dp(this,18),0,UiKit.dp(this,18),UiKit.dp(this,28));
+        scroll.addView(root);
+        page.addView(scroll,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,0,1f));
+
+        setContentView(page);
+        SystemUi.apply(this,page);
+        refreshItems();
     }
 
-    private void reload(){
-        if(root==null)return;
-        items=OutboxStore.load(this);
-        root.removeAllViews();
-
-        TextView intro=UiKit.body(this,"PDFs hinzufügen, Reihenfolge festlegen und zu einem Brief zusammenführen. Dateien aus dem konfigurierten Druckausgangsordner werden automatisch übernommen und nach erfolgreichem Versand gelöscht.");
-        intro.setPadding(0,0,0,UiKit.dp(this,10));root.addView(intro);
-
-        MaterialButton add=UiKit.primary(this,"PDFs hinzufügen");
-        add.setOnClickListener(v->picker.launch(new String[]{"application/pdf"}));
-        root.addView(add,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,54)));
-
-        queueBox=new LinearLayout(this);queueBox.setOrientation(LinearLayout.VERTICAL);
-        if(items.isEmpty()){
-            TextView empty=UiKit.body(this,"Noch keine PDFs im Druckausgang.");empty.setPadding(0,UiKit.dp(this,16),0,UiKit.dp(this,16));queueBox.addView(empty);
+    private void back(){
+        if(step>1){
+            step--;
+            if(step==1)working.clear();
+            renderStep();
         }else{
-            for(int i=0;i<items.size();i++)queueBox.addView(itemCard(i,items.get(i)));
+            getOnBackPressedDispatcher().onBackPressed();
         }
-        root.addView(queueBox);
-
-        if(!items.isEmpty()){
-            MaterialButton next=UiKit.primary(this,items.size()>1?"PDFs verbinden & Vorschau":"Vorschau & Profile");
-            next.setOnClickListener(v->prepareFinal(next));
-            LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,56));lp.setMargins(0,UiKit.dp(this,10),0,0);root.addView(next,lp);
-        }
-
-        finalBox=new LinearLayout(this);finalBox.setOrientation(LinearLayout.VERTICAL);root.addView(finalBox);
     }
 
-    private View itemCard(int index,OutboxItem item){
+    private void refreshItems(){
+        if(root==null)return;
+        allItems=OutboxStore.load(this);
+        if(step==1)renderStep();
+    }
+
+    private void renderStep(){
+        root.removeAllViews();
+        if(step==1)renderSelect();
+        else if(step==2)renderOrder();
+        else renderOptions();
+    }
+
+    private void stepHeader(String number,String title,String subtitle){
         LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);
-        LinearLayout row=new LinearLayout(this);row.setGravity(Gravity.CENTER_VERTICAL);
-        TextView pos=UiKit.heading(this,String.valueOf(index+1),18);pos.setGravity(Gravity.CENTER);row.addView(pos,new LinearLayout.LayoutParams(UiKit.dp(this,38),UiKit.dp(this,44)));
-        LinearLayout text=new LinearLayout(this);text.setOrientation(LinearLayout.VERTICAL);
-        text.addView(UiKit.heading(this,item.name,15));
-        int pages=PdfMergeUtil.countPages(this,item.asUri());
-        TextView meta=UiKit.body(this,pages+" Seite"+(pages==1?"":"n")+(item.deleteAfterSend?" · Auto-Import":""));meta.setTextSize(12);text.addView(meta);
-        row.addView(text,new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1f));
+        TextView n=UiKit.body(this,"Schritt "+number+" von 3");n.setTextSize(12);box.addView(n);
+        TextView t=UiKit.heading(this,title,22);t.setPadding(0,UiKit.dp(this,3),0,0);box.addView(t);
+        TextView s=UiKit.body(this,subtitle);s.setPadding(0,UiKit.dp(this,4),0,UiKit.dp(this,10));box.addView(s);
+        root.addView(box);
+    }
 
-        MaterialButton up=UiKit.tonal(this,"↑");up.setEnabled(index>0);up.setContentDescription("Nach oben");
-        up.setOnClickListener(v->move(index,-1));row.addView(up,new LinearLayout.LayoutParams(UiKit.dp(this,48),UiKit.dp(this,44)));
-        MaterialButton down=UiKit.tonal(this,"↓");down.setEnabled(index<items.size()-1);down.setContentDescription("Nach unten");
-        down.setOnClickListener(v->move(index,1));row.addView(down,new LinearLayout.LayoutParams(UiKit.dp(this,48),UiKit.dp(this,44)));
-        box.addView(row);
+    private void renderSelect(){
+        stepHeader("1","PDFs auswählen","Wähle eine oder mehrere Dateien aus dem Druckausgang. Automatisch importierte PDFs bleiben dort, bis sie erfolgreich versendet wurden.");
 
-        MaterialButton remove=UiKit.tonal(this,"Entfernen");remove.setOnClickListener(v->remove(index));
-        box.addView(remove,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,44)));
+        int[] g=SettingsStore.gradient(this);
+        LinearLayout hero=new LinearLayout(this);hero.setOrientation(LinearLayout.VERTICAL);
+        hero.addView(UiKit.heroTitle(this,allItems.isEmpty()?"PDFs hinzufügen":allItems.size()+" PDF"+(allItems.size()==1?" verfügbar":"s verfügbar"),22));
+        hero.addView(UiKit.heroBody(this,"Dateien können manuell oder über den eingestellten Importordner in den Druckausgang gelangen."));
+        MaterialButton add=UiKit.primary(this,"PDFs hinzufügen");
+        add.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0x33FFFFFF));
+        add.setOnClickListener(v->picker.launch(new String[]{"application/pdf"}));
+        LinearLayout.LayoutParams alp=new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,50));alp.setMargins(0,UiKit.dp(this,10),0,0);hero.addView(add,alp);
+        root.addView(UiKit.hero(this,hero,g[0],g[1]));
+
+        if(allItems.isEmpty())return;
+
+        for(OutboxItem item:allItems){
+            LinearLayout row=new LinearLayout(this);row.setGravity(Gravity.CENTER_VERTICAL);
+            CheckBox check=new CheckBox(this);
+            check.setChecked(selectedIds.contains(item.id));
+            check.setOnCheckedChangeListener((b,checked)->{
+                if(checked)selectedIds.add(item.id);else selectedIds.remove(item.id);
+            });
+            row.addView(check,new LinearLayout.LayoutParams(UiKit.dp(this,48),UiKit.dp(this,48)));
+
+            LinearLayout text=new LinearLayout(this);text.setOrientation(LinearLayout.VERTICAL);
+            TextView name=UiKit.heading(this,item.name,15);name.setMaxLines(2);text.addView(name);
+            int pages=PdfMergeUtil.countPages(this,item.asUri());
+            TextView meta=UiKit.body(this,pages+" Seite"+(pages==1?"":"n")+(item.deleteAfterSend?" · Auto-Import":""));
+            meta.setTextSize(12);text.addView(meta);
+            row.addView(text,new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1f));
+            root.addView(UiKit.surfaceCard(this,row));
+        }
+
+        MaterialButton next=UiKit.primary(this,"Auswahl weiter");
+        next.setOnClickListener(v->{
+            working.clear();
+            for(OutboxItem i:allItems)if(selectedIds.contains(i.id))working.add(i);
+            if(working.isEmpty()){DebugUtil.error(this,next,"Bitte mindestens eine PDF auswählen.");return;}
+            step=2;prepareMerged(false);renderStep();
+        });
+        LinearLayout.LayoutParams nlp=new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,56));nlp.setMargins(0,UiKit.dp(this,10),0,0);root.addView(next,nlp);
+    }
+
+    private void renderOrder(){
+        stepHeader("2","Reihenfolge & Vorschau","Ordne die ausgewählten PDFs. Entfernen nimmt eine Datei nur aus diesem Versand, nicht aus dem Druckausgang.");
+
+        LinearLayout previewCard=new LinearLayout(this);previewCard.setOrientation(LinearLayout.VERTICAL);
+        previewCard.addView(UiKit.heading(this,"Erste Vorschau",17));
+        ImageView preview=new ImageView(this);preview.setAdjustViewBounds(true);preview.setContentDescription("Vorschau der zusammengeführten PDF");
+        if(previewBitmap!=null)preview.setImageBitmap(previewBitmap);
+        previewCard.addView(preview,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,330)));
+        int pages=merged==null?working.stream().mapToInt(i->PdfMergeUtil.countPages(this,i.asUri())).sum():PdfMergeUtil.countPages(merged);
+        previewCard.addView(UiKit.body(this,working.size()+" PDF"+(working.size()==1?"":"s")+" · "+pages+" Seite"+(pages==1?"":"n")));
+        root.addView(UiKit.surfaceCard(this,previewCard));
+
+        for(int i=0;i<working.size();i++)root.addView(orderCard(i,working.get(i)));
+
+        MaterialButton next=UiKit.primary(this,"Versand vorbereiten");
+        next.setOnClickListener(v->{
+            if(working.isEmpty()){DebugUtil.error(this,next,"Keine PDF für diesen Versand ausgewählt.");return;}
+            prepareMerged(true);
+        });
+        LinearLayout.LayoutParams nlp=new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,56));nlp.setMargins(0,UiKit.dp(this,10),0,0);root.addView(next,nlp);
+    }
+
+    private View orderCard(int index,OutboxItem item){
+        LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout titleRow=new LinearLayout(this);titleRow.setGravity(Gravity.CENTER_VERTICAL);
+        TextView number=UiKit.heading(this,String.valueOf(index+1),18);number.setGravity(Gravity.CENTER);
+        titleRow.addView(number,new LinearLayout.LayoutParams(UiKit.dp(this,36),UiKit.dp(this,44)));
+        TextView title=UiKit.heading(this,item.name,15);title.setMaxLines(2);
+        titleRow.addView(title,new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1f));
+        box.addView(titleRow);
+
+        LinearLayout actions=new LinearLayout(this);actions.setGravity(Gravity.CENTER);
+        MaterialButton up=UiKit.tonal(this,"Nach oben");up.setEnabled(index>0);
+        up.setOnClickListener(v->{Collections.swap(working,index,index-1);prepareMerged(false);renderStep();});
+        actions.addView(up,new LinearLayout.LayoutParams(0,UiKit.dp(this,46),1f));
+        actions.addView(new View(this),new LinearLayout.LayoutParams(UiKit.dp(this,8),1));
+        MaterialButton down=UiKit.tonal(this,"Nach unten");down.setEnabled(index<working.size()-1);
+        down.setOnClickListener(v->{Collections.swap(working,index,index+1);prepareMerged(false);renderStep();});
+        actions.addView(down,new LinearLayout.LayoutParams(0,UiKit.dp(this,46),1f));
+        box.addView(actions);
+
+        MaterialButton remove=UiKit.tonal(this,"Aus diesem Versand entfernen");
+        remove.setOnClickListener(v->{working.remove(index);prepareMerged(false);renderStep();});
+        LinearLayout.LayoutParams rlp=new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,46));rlp.setMargins(0,UiKit.dp(this,8),0,0);box.addView(remove,rlp);
         return UiKit.surfaceCard(this,box);
     }
 
-    private void move(int index,int delta){
-        int target=index+delta;if(target<0||target>=items.size())return;
-        java.util.Collections.swap(items,index,target);OutboxStore.save(this,items);reload();
-    }
-
-    private void remove(int index){
-        items.remove(index);OutboxStore.save(this,items);reload();
-    }
-
-    private void prepareFinal(MaterialButton button){
-        button.setEnabled(false);button.setText("PDF wird vorbereitet…");
-        List<OutboxItem> snapshot=new ArrayList<>(items);
+    private void prepareMerged(boolean advance){
+        List<OutboxItem> snapshot=new ArrayList<>(working);
         new Thread(()->{
             try{
-                File file=PdfMergeUtil.merge(this,snapshot);
+                File next=PdfMergeUtil.merge(this,snapshot);
+                Bitmap bitmap=renderFirstPage(next,900);
                 runOnUiThread(()->{
-                    if(merged!=null)merged.delete();
-                    merged=file;
-                    showFinal(snapshot);
-                    button.setEnabled(true);button.setText("Vorschau aktualisieren");
+                    if(merged!=null&&merged.exists())merged.delete();
+                    if(previewBitmap!=null&&!previewBitmap.isRecycled())previewBitmap.recycle();
+                    merged=next;previewBitmap=bitmap;
+                    if(advance){step=3;renderStep();}
+                    else if(step==2)renderStep();
                 });
             }catch(Exception e){
-                runOnUiThread(()->{button.setEnabled(true);button.setText("Erneut versuchen");DebugUtil.error(this,button,"PDFs verbinden",e);});
+                runOnUiThread(()->DebugUtil.error(this,root,"PDFs verbinden",e));
             }
-        },"pdf-merge").start();
+        },"outbox-merge").start();
     }
 
-    private void showFinal(List<OutboxItem> snapshot){
-        finalBox.removeAllViews();
-        finalBox.addView(section("Vorschau"));
-
-        LinearLayout previewCard=new LinearLayout(this);previewCard.setOrientation(LinearLayout.VERTICAL);
-        ImageView preview=new ImageView(this);preview.setAdjustViewBounds(true);preview.setContentDescription("Vorschau der ersten Seite");
-        previewCard.addView(preview,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,360)));
-        int pages=PdfMergeUtil.countPages(merged);
-        TextView meta=UiKit.body(this,snapshot.size()+" PDF"+(snapshot.size()==1?"":"s")+" · "+pages+" Seite"+(pages==1?"":"n"));
-        previewCard.addView(meta);
-        finalBox.addView(UiKit.surfaceCard(this,previewCard));
-        renderPreview(preview,merged);
-
-        finalBox.addView(section("Versandprofil & Kosten"));
-        RadioGroup group=new RadioGroup(this);
-        List<Profile> profiles=SecureStore.load(this);
-        for(Profile p:profiles){
-            if(!p.active)continue;
-            RadioButton rb=new RadioButton(this);rb.setId(View.generateViewId());rb.setTag(p.id);
-            rb.setText((Profile.PROVIDER_LETTERXPRESS.equals(p.provider)?"LetterXpress":"Deutsche Post")+" · "+p.name);
-            if(selectedProfileId==null)selectedProfileId=p.id;rb.setChecked(p.id.equals(selectedProfileId));
-            group.addView(rb);
-            TextView price=UiKit.body(this,"Kosten werden ermittelt…");price.setTextSize(13);
-            price.setPadding(UiKit.dp(this,42),0,0,UiKit.dp(this,8));group.addView(price);
-            loadPrice(p,pages,price);
+    private Bitmap renderFirstPage(File file,int width) throws Exception{
+        try(ParcelFileDescriptor pfd=ParcelFileDescriptor.open(file,ParcelFileDescriptor.MODE_READ_ONLY);
+            PdfRenderer renderer=new PdfRenderer(pfd);
+            PdfRenderer.Page page=renderer.openPage(0)){
+            int height=Math.max(1,Math.round(width*(page.getHeight()/(float)page.getWidth())));
+            Bitmap bitmap=Bitmap.createBitmap(width,height,Bitmap.Config.ARGB_8888);
+            page.render(bitmap,null,null,PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
+            return bitmap;
         }
-        group.setOnCheckedChangeListener((g,id)->{
-            View candidate=g.findViewById(id);
-            if(candidate!=null)selectedProfileId=String.valueOf(candidate.getTag());
-        });
-        finalBox.addView(UiKit.surfaceCard(this,group));
+    }
 
-        MaterialButton send=UiKit.primary(this,"Jetzt versenden");
-        send.setOnClickListener(v->send(snapshot,send));
-        LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,58));lp.setMargins(0,UiKit.dp(this,12),0,0);finalBox.addView(send,lp);
+    private void renderOptions(){
+        stepHeader("3","Layout, Druck & Versand","Prüfe das Adresslayout, lege Druck- und Zusatzoptionen fest und wähle danach eines der kompatiblen Profile.");
+
+        LinearLayout print= new LinearLayout(this);print.setOrientation(LinearLayout.VERTICAL);
+        print.addView(UiKit.heading(this,"Druckeinstellungen",17));
+        color=new MaterialSwitch(this);color.setText("Farbdruck");print.addView(color);
+        duplex=new MaterialSwitch(this);duplex.setText("Doppelseitig");print.addView(duplex);
+        TextView regLabel=UiKit.body(this,"Einschreiben");regLabel.setPadding(0,UiKit.dp(this,8),0,0);print.addView(regLabel);
+        registered=new Spinner(this);
+        registered.setAdapter(new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,new String[]{"Nein","Einschreiben Einwurf","Einschreiben","Einschreiben Rückschein"}));
+        print.addView(registered,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,52)));
+        c4=new MaterialSwitch(this);c4.setText("C4-Umschlag, ungefalzt");print.addView(c4);
+        root.addView(UiKit.surfaceCard(this,print));
+
+        LinearLayout addressBox=new LinearLayout(this);addressBox.setOrientation(LinearLayout.VERTICAL);
+        addressBox.addView(UiKit.heading(this,"Adresslayout",17));
+        localCorrection=new MaterialSwitch(this);localCorrection.setText("Adressbereiche vor dem Versand verschieben");addressBox.addView(localCorrection);
+        layoutHint=UiKit.body(this,"Wähle unten ein Profil. Bei Einschreiben markiert die Vorschau reservierte Flächen. Rot bedeutet, dass die aktuelle Position kollidiert.");
+        layoutHint.setTextSize(13);layoutHint.setPadding(0,UiKit.dp(this,4),0,UiKit.dp(this,8));addressBox.addView(layoutHint);
+        addressPreview=new AddressConfigView(this);
+        addressPreview.setSnapEnabled(false);
+        addressPreview.setInteractive(false);
+        if(previewBitmap!=null)addressPreview.setBitmap(previewBitmap.copy(Bitmap.Config.ARGB_8888,false));
+        addressPreview.setListener((sender,recipient)->{targetSender=new RectF(sender);targetRecipient=new RectF(recipient);updateLayoutHint();});
+        addressBox.addView(addressPreview,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,350)));
+        root.addView(UiKit.surfaceCard(this,addressBox));
+
+        root.addView(section("Kompatible Profile & Kosten"));
+        profileGroup=new RadioGroup(this);
+        profilePriceBox=new LinearLayout(this);profilePriceBox.setOrientation(LinearLayout.VERTICAL);
+        root.addView(profilePriceBox);
+
+        View.OnClickListener refresh=v->refreshProfiles();
+        color.setOnClickListener(refresh);duplex.setOnClickListener(refresh);c4.setOnClickListener(refresh);
+        registered.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){
+            public void onItemSelected(android.widget.AdapterView<?> p,View v,int pos,long id){refreshProfiles();}
+            public void onNothingSelected(android.widget.AdapterView<?> p){}
+        });
+        localCorrection.setOnCheckedChangeListener((b,checked)->{
+            Profile p=SecureStore.find(this,selectedProfileId);
+            applyLayoutForProfile(p,checked);
+        });
+
+        refreshProfiles();
+
+        MaterialButton send=UiKit.primary(this,"Brief jetzt versenden");
+        send.setOnClickListener(v->send(send));
+        LinearLayout.LayoutParams slp=new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,58));slp.setMargins(0,UiKit.dp(this,12),0,0);root.addView(send,slp);
     }
 
     private TextView section(String text){
-        TextView t=UiKit.heading(this,text,19);t.setPadding(0,UiKit.dp(this,16),0,UiKit.dp(this,6));return t;
+        TextView t=UiKit.heading(this,text,19);t.setPadding(0,UiKit.dp(this,14),0,UiKit.dp(this,5));return t;
     }
 
-    private void loadPrice(Profile p,int pages,TextView target){
-        if(!Profile.PROVIDER_LETTERXPRESS.equals(p.provider)){
+    private JobOptions currentOptions(){
+        JobOptions o=new JobOptions();
+        o.color=color!=null&&color.isChecked();
+        o.duplex=duplex!=null&&duplex.isChecked();
+        o.registered=registered==null?"Nein":String.valueOf(registered.getSelectedItem());
+        o.c4=c4!=null&&c4.isChecked();
+        return o;
+    }
+
+    private boolean compatible(Profile p,JobOptions o){
+        if(!p.active)return false;
+        if(Profile.PROVIDER_POST.equals(p.provider)){
+            if(p.color!=o.color||p.duplex!=o.duplex)return false;
+            String pr=p.registeredMail==null?"Nein":p.registeredMail;
+            if(!pr.equals(o.registered))return false;
+            return true;
+        }
+        if("Einschreiben Rückschein".equals(o.registered))return false;
+        return true;
+    }
+
+    private void refreshProfiles(){
+        if(profilePriceBox==null)return;
+        JobOptions o=currentOptions();
+        profilePriceBox.removeAllViews();
+        profileGroup=new RadioGroup(this);
+
+        List<Profile> profiles=SecureStore.load(this);
+        int pages=merged==null?0:PdfMergeUtil.countPages(merged);
+        boolean found=false;
+        for(Profile p:profiles){
+            if(!compatible(p,o))continue;
+            found=true;
+            LinearLayout card=new LinearLayout(this);card.setOrientation(LinearLayout.VERTICAL);
+            LinearLayout row=new LinearLayout(this);row.setGravity(Gravity.CENTER_VERTICAL);
+            ImageView logo=new ImageView(this);logo.setImageResource(Profile.PROVIDER_LETTERXPRESS.equals(p.provider)?R.drawable.ic_provider_lxp:R.drawable.ic_provider_post);
+            row.addView(logo,new LinearLayout.LayoutParams(UiKit.dp(this,40),UiKit.dp(this,40)));
+            RadioButton rb=new RadioButton(this);rb.setId(View.generateViewId());rb.setTag(p.id);
+            rb.setText(p.name);rb.setTextSize(16);
+            if(selectedProfileId==null)selectedProfileId=p.id;
+            rb.setChecked(p.id.equals(selectedProfileId));
+            row.addView(rb,new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1f));
+            card.addView(row);
+
+            TextView route=UiKit.body(this,Profile.PROVIDER_LETTERXPRESS.equals(p.provider)?"LetterXpress · "+(Profile.TYPE_LXP_API.equals(p.type)?"API":"SFTP"):"Deutsche Post · "+(Profile.TYPE_IPP.equals(p.type)?"IPP":"WebDAV"));
+            route.setTextSize(12);route.setPadding(UiKit.dp(this,48),0,0,0);card.addView(route);
+            TextView price=UiKit.body(this,"Kosten werden ermittelt…");price.setPadding(UiKit.dp(this,48),UiKit.dp(this,4),0,0);card.addView(price);
+            loadPrice(p,o,pages,price);
+
+            rb.setOnCheckedChangeListener((button,checked)->{
+                if(!checked)return;
+                selectedProfileId=String.valueOf(button.getTag());
+                applyLayoutForProfile(SecureStore.find(this,selectedProfileId),localCorrection.isChecked());
+            });
+            profilePriceBox.addView(UiKit.surfaceCard(this,card));
+        }
+
+        if(!found){
+            selectedProfileId=null;
+            TextView none=UiKit.body(this,"Kein Profil unterstützt diese Kombination. Deutsche-Post-Profile entsprechen ihren serverseitig konfigurierten Druckoptionen; LetterXpress unterstützt kein Rückschein-Profil.");
+            profilePriceBox.addView(UiKit.surfaceCard(this,none));
+        }else{
+            Profile p=SecureStore.find(this,selectedProfileId);
+            if(p==null){
+                for(Profile candidate:profiles)if(compatible(candidate,o)){selectedProfileId=candidate.id;p=candidate;break;}
+            }
+            applyLayoutForProfile(p,localCorrection.isChecked());
+        }
+    }
+
+    private void loadPrice(Profile p,JobOptions o,int pages,TextView target){
+        if(Profile.PROVIDER_POST.equals(p.provider)){
             target.setText("Preis wird vom E-POST-Ziel bestimmt");return;
         }
-        JobOptions o=JobOptions.fromProfile(p);
         if(Profile.TYPE_LXP_SFTP.equals(p.type)){
             double value=LetterXpressPriceEstimator.gross(o,pages);
             target.setText(value>=0?String.format(java.util.Locale.GERMANY,"ca. %.2f € brutto",value):"Preis nicht verfügbar");
@@ -219,38 +408,99 @@ public class OutboxActivity extends AppCompatActivity {
         },"profile-price").start();
     }
 
-    private void renderPreview(ImageView target,File file){
-        new Thread(()->{
-            Bitmap bitmap=null;
-            try(ParcelFileDescriptor pfd=ParcelFileDescriptor.open(file,ParcelFileDescriptor.MODE_READ_ONLY);
-                PdfRenderer renderer=new PdfRenderer(pfd);
-                PdfRenderer.Page page=renderer.openPage(0)){
-                int width=900;int height=Math.round(width*(page.getHeight()/(float)page.getWidth()));
-                bitmap=Bitmap.createBitmap(width,height,Bitmap.Config.ARGB_8888);
-                page.render(bitmap,null,null,PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
-                Bitmap result=bitmap;runOnUiThread(()->target.setImageBitmap(result));
-            }catch(Exception e){
-                if(bitmap!=null&&!bitmap.isRecycled())bitmap.recycle();
-            }
-        },"outbox-preview").start();
+    private void applyLayoutForProfile(Profile p,boolean correctionRequested){
+        if(addressPreview==null)return;
+        JobOptions o=currentOptions();
+        if(p==null){
+            addressPreview.setReservedArea(null,null);addressPreview.setInteractive(false);return;
+        }
+
+        boolean remotePost=Profile.PROVIDER_POST.equals(p.provider)&&p.addressCorrection;
+        boolean configured=AddressCorrectionProcessor.configured(p);
+        localCorrection.setEnabled(!remotePost&&configured);
+
+        if(remotePost){
+            localCorrection.setChecked(false);
+            RectF sourceS=AddressCorrectionProcessor.decode(p.senderWindow);
+            RectF sourceR=AddressCorrectionProcessor.decode(p.recipientWindow);
+            if(!sourceS.isEmpty()&&!sourceR.isEmpty())addressPreview.setBoxes(sourceS,sourceR);
+            addressPreview.setReservedArea(null,null);addressPreview.setInteractive(false);
+            layoutHint.setText("Dieses Deutsche-Post-Profil ist als serverseitig adresskorrigiert markiert. Die App verschiebt die Adresse deshalb nicht noch einmal.");
+            return;
+        }
+
+        if(!configured){
+            localCorrection.setChecked(false);
+            addressPreview.setInteractive(false);
+            addressPreview.setReservedArea(AddressLayoutRules.reserved(p,o),"Reserviert für DV-Freimachung");
+            layoutHint.setText("Für dieses Profil sind noch keine Quellbereiche gespeichert. Konfiguriere Absender und Empfänger zuerst im Versandfeld-Assistenten.");
+            return;
+        }
+
+        if(correctionRequested){
+            targetSender=AddressLayoutRules.targetSender(p,o);
+            targetRecipient=AddressLayoutRules.targetRecipient(p,o);
+            addressPreview.setBoxes(targetSender,targetRecipient);
+            addressPreview.setInteractive(true);
+        }else{
+            targetSender=AddressCorrectionProcessor.decode(p.senderWindow);
+            targetRecipient=AddressCorrectionProcessor.decode(p.recipientWindow);
+            addressPreview.setBoxes(targetSender,targetRecipient);
+            addressPreview.setInteractive(false);
+        }
+        RectF reserved=AddressLayoutRules.reserved(p,o);
+        addressPreview.setReservedArea(reserved,reserved.isEmpty()?null:"Reserviert für DV-Freimachung");
+        updateLayoutHint();
     }
 
-    private void send(List<OutboxItem> snapshot,MaterialButton button){
-        if(merged==null||!merged.exists()){DebugUtil.error(this,button,"Vorschau zuerst erstellen.");return;}
+    private void updateLayoutHint(){
         Profile p=SecureStore.find(this,selectedProfileId);
-        if(p==null){DebugUtil.error(this,button,"Bitte ein Versandprofil wählen.");return;}
+        if(p==null)return;
+        if(addressPreview.hasCollision()){
+            layoutHint.setText("Adressbereich kollidiert mit einer reservierten Zone. Aktiviere die Korrektur und verschiebe Absender/Empfänger, bis die rote Markierung verschwindet.");
+        }else if(localCorrection.isChecked()){
+            layoutHint.setText("Adresskorrektur aktiv. Die markierten Bereiche werden vor dem Versand aus dem Original ausgeschnitten und an dieser Position wieder eingesetzt.");
+        }else{
+            layoutHint.setText("Adresslayout geprüft. Aktiviere die Korrektur nur, wenn die aktuelle Position für die gewählte Versandart nicht geeignet ist.");
+        }
+    }
+
+    private void send(MaterialButton button){
+        Profile p=SecureStore.find(this,selectedProfileId);
+        if(p==null){DebugUtil.error(this,button,"Bitte ein kompatibles Profil wählen.");return;}
+        if(merged==null||!merged.exists()){DebugUtil.error(this,button,"Die zusammengeführte PDF fehlt.");return;}
+        JobOptions o=currentOptions();
+
+        boolean remotePost=Profile.PROVIDER_POST.equals(p.provider)&&p.addressCorrection;
+        boolean doCorrection=localCorrection.isChecked()&&!remotePost;
+        if(addressPreview.hasCollision()&&!doCorrection){
+            DebugUtil.error(this,button,"Adresslayout kollidiert mit einem reservierten Bereich. Korrigiere die Position vor dem Versand.");
+            return;
+        }
+
         button.setEnabled(false);button.setText("Wird versendet…");
-        File file=merged;
+        File source=merged;
+        List<OutboxItem> sentItems=new ArrayList<>(working);
         new Thread(()->{
+            File corrected=null;
             try{
-                ProviderSender.send(this,Uri.fromFile(file),p,JobOptions.fromProfile(p));
-                int deleteFailures=OutboxStore.removeSent(this,snapshot);
+                File outgoing=source;
+                if(doCorrection){
+                    corrected=AddressCorrectionProcessor.apply(this,source,p,targetSender,targetRecipient);
+                    outgoing=corrected;
+                }
+                ProviderSender.send(this,Uri.fromFile(outgoing),p,o);
+                int deleteFailures=OutboxStore.removeSent(this,sentItems);
+                File finalCorrected=corrected;
                 runOnUiThread(()->{
-                    Snackbar.make(button,deleteFailures==0?"Versand erfolgreich übergeben.":"Versand erfolgreich. "+deleteFailures+" Quelldatei(en) konnten nicht gelöscht werden und werden nicht erneut importiert.",Snackbar.LENGTH_LONG).show();
+                    if(finalCorrected!=null)finalCorrected.delete();
+                    Snackbar.make(button,deleteFailures==0?"Versand erfolgreich übergeben.":"Versand erfolgreich. Einige Auto-Import-Dateien konnten nicht gelöscht werden und werden nicht erneut importiert.",Snackbar.LENGTH_LONG).show();
+                    selectedIds.clear();working.clear();step=1;
                     if(merged!=null){merged.delete();merged=null;}
-                    reload();
+                    refreshItems();
                 });
             }catch(Exception e){
+                if(corrected!=null)corrected.delete();
                 runOnUiThread(()->{button.setEnabled(true);button.setText("Erneut versenden");DebugUtil.error(this,button,"Versand",e);});
             }
         },"outbox-send").start();
@@ -258,6 +508,8 @@ public class OutboxActivity extends AppCompatActivity {
 
     @Override protected void onDestroy(){
         if(merged!=null)merged.delete();
+        if(previewBitmap!=null&&!previewBitmap.isRecycled())previewBitmap.recycle();
+        if(addressPreview!=null)addressPreview.clearBitmap();
         super.onDestroy();
     }
 }
