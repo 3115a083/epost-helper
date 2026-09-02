@@ -4,49 +4,74 @@ import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Paint;
+import android.graphics.Rect;
 import android.graphics.RectF;
 import android.view.MotionEvent;
 import android.view.View;
 
 public final class AddressConfigView extends View {
+    private static final float TOP_FRACTION=0.34f;
+    private static final float SNAP_X=0.105f;
+    private static final float HANDLE=0.035f;
+
     private final Paint paint=new Paint(Paint.ANTI_ALIAS_FLAG);
     private Bitmap pageBitmap;
     private final RectF imageRect=new RectF();
-    private final RectF selection=new RectF();
+    private final RectF sender=new RectF(0.105f,0.055f,0.535f,0.105f);
+    private final RectF recipient=new RectF(0.105f,0.115f,0.535f,0.235f);
+
+    private RectF active;
+    private boolean resizing=false;
+    private boolean snapEnabled=true;
     private float downX,downY;
+    private float startLeft,startTop,startRight,startBottom;
     private Listener listener;
 
-    public interface Listener{ void onSelection(float left,float top,float right,float bottom); }
+    public interface Listener{
+        void onChanged(RectF sender,RectF recipient);
+    }
 
     public AddressConfigView(Context c){
         super(c);
-        setMinimumHeight(UiKit.dp(c,520));
-        setContentDescription("PDF-Vorschau. Ziehen Sie über den Adressbereich.");
+        setMinimumHeight(UiKit.dp(c,360));
+        setContentDescription("Oberes Drittel des Briefes mit verschiebbaren Feldern für Absender und Empfänger.");
     }
 
-    public void setListener(Listener listener){ this.listener=listener; }
+    public void setListener(Listener l){ listener=l; }
 
     public void setBitmap(Bitmap bitmap){
         if(pageBitmap!=null&&pageBitmap!=bitmap&&!pageBitmap.isRecycled()) pageBitmap.recycle();
         pageBitmap=bitmap;
-        selection.setEmpty();
         invalidate();
     }
+
+    public void setSnapEnabled(boolean enabled){
+        snapEnabled=enabled;
+        if(enabled){
+            snapBox(sender);
+            snapBox(recipient);
+            notifyChange();
+        }
+        invalidate();
+    }
+
+    public boolean isSnapEnabled(){ return snapEnabled; }
+
+    public void setBoxes(RectF senderBox,RectF recipientBox){
+        if(senderBox!=null&&!senderBox.isEmpty()) sender.set(senderBox);
+        if(recipientBox!=null&&!recipientBox.isEmpty()) recipient.set(recipientBox);
+        constrain(sender);
+        constrain(recipient);
+        invalidate();
+    }
+
+    public RectF senderBox(){ return new RectF(sender); }
+    public RectF recipientBox(){ return new RectF(recipient); }
 
     public void clearBitmap(){
         if(pageBitmap!=null&&!pageBitmap.isRecycled()) pageBitmap.recycle();
         pageBitmap=null;
-        selection.setEmpty();
         invalidate();
-    }
-
-    public RectF normalizedSelection(){
-        if(imageRect.isEmpty()||selection.isEmpty()) return new RectF();
-        return new RectF(
-                (selection.left-imageRect.left)/imageRect.width(),
-                (selection.top-imageRect.top)/imageRect.height(),
-                (selection.right-imageRect.left)/imageRect.width(),
-                (selection.bottom-imageRect.top)/imageRect.height());
     }
 
     @Override protected void onDraw(Canvas canvas){
@@ -58,51 +83,138 @@ public final class AddressConfigView extends View {
         if(pageBitmap==null){
             paint.setColor(UiKit.resolveSecondaryText(getContext()));
             paint.setTextSize(UiKit.dp(getContext(),15));
-            canvas.drawText("PDF auswählen, um die erste Seite anzuzeigen.",UiKit.dp(getContext(),18),UiKit.dp(getContext(),40),paint);
+            canvas.drawText("PDF auswählen, um das obere Drittel anzuzeigen.",UiKit.dp(getContext(),18),UiKit.dp(getContext(),40),paint);
             return;
         }
 
-        float maxW=getWidth()-UiKit.dp(getContext(),24);
-        float maxH=getHeight()-UiKit.dp(getContext(),24);
-        float scale=Math.min(maxW/pageBitmap.getWidth(),maxH/pageBitmap.getHeight());
-        float w=pageBitmap.getWidth()*scale, h=pageBitmap.getHeight()*scale;
-        float left=(getWidth()-w)/2f, top=UiKit.dp(getContext(),12);
-        imageRect.set(left,top,left+w,top+h);
+        float maxW=getWidth()-UiKit.dp(getContext(),20);
+        float sourceH=pageBitmap.getHeight()*TOP_FRACTION;
+        float ratio=maxW/pageBitmap.getWidth();
+        float drawH=sourceH*ratio;
+        float left=(getWidth()-maxW)/2f;
+        float top=UiKit.dp(getContext(),10);
+        imageRect.set(left,top,left+maxW,top+drawH);
 
         paint.setColor(0x22000000);
-        canvas.drawRoundRect(new RectF(left-4,top-4,left+w+4,top+h+4),10,10,paint);
-        canvas.drawBitmap(pageBitmap,null,imageRect,null);
+        canvas.drawRoundRect(new RectF(left-3,top-3,left+maxW+3,top+drawH+3),10,10,paint);
 
-        if(!selection.isEmpty()){
-            paint.setStyle(Paint.Style.FILL); paint.setColor(0x335B5BD6);
-            canvas.drawRect(selection,paint);
-            paint.setStyle(Paint.Style.STROKE); paint.setStrokeWidth(UiKit.dp(getContext(),2)); paint.setColor(SettingsStore.primary(getContext()));
-            canvas.drawRect(selection,paint);
-            paint.setStyle(Paint.Style.FILL); paint.setTextSize(UiKit.dp(getContext(),12)); paint.setColor(SettingsStore.primary(getContext()));
-            canvas.drawText("Adressbereich",selection.left+UiKit.dp(getContext(),6),Math.max(selection.top-UiKit.dp(getContext(),6),top+UiKit.dp(getContext(),14)),paint);
+        Rect src=new Rect(0,0,pageBitmap.getWidth(),Math.max(1,Math.round(sourceH)));
+        canvas.drawBitmap(pageBitmap,src,imageRect,null);
+
+        if(snapEnabled){
+            float sx=imageRect.left+SNAP_X*imageRect.width();
+            paint.setColor(0x335B5BD6);
+            paint.setStrokeWidth(UiKit.dp(getContext(),1));
+            canvas.drawLine(sx,imageRect.top,sx,imageRect.bottom,paint);
+        }
+
+        drawBox(canvas,sender,"Absender",0xFF287A61);
+        drawBox(canvas,recipient,"Empfänger",SettingsStore.primary(getContext()));
+    }
+
+    private void drawBox(Canvas canvas,RectF normalized,String label,int color){
+        RectF px=toPixels(normalized);
+        paint.setStyle(Paint.Style.FILL);
+        paint.setColor((color&0x00FFFFFF)|0x26000000);
+        canvas.drawRoundRect(px,8,8,paint);
+        paint.setStyle(Paint.Style.STROKE);
+        paint.setStrokeWidth(UiKit.dp(getContext(),2));
+        paint.setColor(color);
+        canvas.drawRoundRect(px,8,8,paint);
+
+        paint.setStyle(Paint.Style.FILL);
+        paint.setTextSize(UiKit.dp(getContext(),12));
+        canvas.drawText(label,px.left+UiKit.dp(getContext(),6),px.top+UiKit.dp(getContext(),16),paint);
+
+        if(!snapEnabled){
+            float h=UiKit.dp(getContext(),12);
+            canvas.drawCircle(px.right-h,px.bottom-h,h/2f,paint);
         }
     }
 
-    @Override public boolean onTouchEvent(MotionEvent event){
-        if(pageBitmap==null||imageRect.isEmpty()) return true;
-        float x=Math.max(imageRect.left,Math.min(event.getX(),imageRect.right));
-        float y=Math.max(imageRect.top,Math.min(event.getY(),imageRect.bottom));
+    private RectF toPixels(RectF n){
+        return new RectF(
+                imageRect.left+n.left*imageRect.width(),
+                imageRect.top+(n.top/TOP_FRACTION)*imageRect.height(),
+                imageRect.left+n.right*imageRect.width(),
+                imageRect.top+(n.bottom/TOP_FRACTION)*imageRect.height());
+    }
 
-        if(event.getAction()==MotionEvent.ACTION_DOWN){
-            if(!imageRect.contains(event.getX(),event.getY())) return true;
-            downX=x; downY=y; selection.set(x,y,x,y); invalidate(); return true;
+    private RectF toNormalized(RectF px){
+        return new RectF(
+                (px.left-imageRect.left)/imageRect.width(),
+                ((px.top-imageRect.top)/imageRect.height())*TOP_FRACTION,
+                (px.right-imageRect.left)/imageRect.width(),
+                ((px.bottom-imageRect.top)/imageRect.height())*TOP_FRACTION);
+    }
+
+    @Override public boolean onTouchEvent(MotionEvent e){
+        if(pageBitmap==null||imageRect.isEmpty()) return true;
+
+        if(e.getAction()==MotionEvent.ACTION_DOWN){
+            RectF senderPx=toPixels(sender);
+            RectF recipientPx=toPixels(recipient);
+            active=senderPx.contains(e.getX(),e.getY())?sender:
+                    (recipientPx.contains(e.getX(),e.getY())?recipient:null);
+            if(active==null)return true;
+
+            getParent().requestDisallowInterceptTouchEvent(true);
+            RectF activePx=toPixels(active);
+            resizing=!snapEnabled&&distance(e.getX(),e.getY(),activePx.right,activePx.bottom)<UiKit.dp(getContext(),28);
+            downX=e.getX(); downY=e.getY();
+            startLeft=active.left; startTop=active.top; startRight=active.right; startBottom=active.bottom;
+            return true;
         }
-        if(event.getAction()==MotionEvent.ACTION_MOVE){
-            selection.set(Math.min(downX,x),Math.min(downY,y),Math.max(downX,x),Math.max(downY,y));
-            invalidate(); return true;
-        }
-        if(event.getAction()==MotionEvent.ACTION_UP){
-            selection.set(Math.min(downX,x),Math.min(downY,y),Math.max(downX,x),Math.max(downY,y));
+
+        if(e.getAction()==MotionEvent.ACTION_MOVE&&active!=null){
+            float dx=(e.getX()-downX)/Math.max(1f,imageRect.width());
+            float dy=((e.getY()-downY)/Math.max(1f,imageRect.height()))*TOP_FRACTION;
+
+            if(resizing){
+                active.right=Math.max(active.left+HANDLE,startRight+dx);
+                active.bottom=Math.max(active.top+0.025f,startBottom+dy);
+            }else{
+                float w=startRight-startLeft,h=startBottom-startTop;
+                active.left=startLeft+dx;
+                active.top=startTop+dy;
+                active.right=active.left+w;
+                active.bottom=active.top+h;
+                if(snapEnabled)snapBox(active);
+            }
+            constrain(active);
             invalidate();
-            RectF n=normalizedSelection();
-            if(listener!=null&&!n.isEmpty()) listener.onSelection(n.left,n.top,n.right,n.bottom);
+            notifyChange();
+            return true;
+        }
+
+        if(e.getAction()==MotionEvent.ACTION_UP||e.getAction()==MotionEvent.ACTION_CANCEL){
+            getParent().requestDisallowInterceptTouchEvent(false);
+            active=null; resizing=false;
             return true;
         }
         return true;
+    }
+
+    private static float distance(float x1,float y1,float x2,float y2){
+        float dx=x1-x2,dy=y1-y2;
+        return (float)Math.sqrt(dx*dx+dy*dy);
+    }
+
+    private void snapBox(RectF box){
+        float w=box.width();
+        box.left=SNAP_X;
+        box.right=SNAP_X+w;
+    }
+
+    private void constrain(RectF box){
+        float w=box.width(),h=box.height();
+        if(box.left<0){box.left=0;box.right=w;}
+        if(box.right>1){box.right=1;box.left=1-w;}
+        if(box.top<0){box.top=0;box.bottom=h;}
+        if(box.bottom>TOP_FRACTION){box.bottom=TOP_FRACTION;box.top=TOP_FRACTION-h;}
+    }
+
+    private void notifyChange(){
+        if(listener!=null)listener.onChanged(new RectF(sender),new RectF(recipient));
     }
 }
