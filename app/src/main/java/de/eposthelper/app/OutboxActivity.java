@@ -1,6 +1,7 @@
 package de.eposthelper.app;
 
 import android.content.Intent;
+import android.content.ClipData;
 import android.graphics.Bitmap;
 import android.graphics.RectF;
 import android.graphics.pdf.PdfRenderer;
@@ -8,11 +9,13 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.os.ParcelFileDescriptor;
 import android.view.Gravity;
+import android.view.DragEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ArrayAdapter;
 import android.widget.CheckBox;
 import android.widget.ImageView;
+import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.RadioButton;
 import android.widget.RadioGroup;
@@ -43,6 +46,10 @@ public class OutboxActivity extends AppCompatActivity {
     private List<OutboxItem> working=new ArrayList<>();
     private File merged;
     private Bitmap previewBitmap;
+    private int previewIndex=0;
+    private ImageView orderPreviewImage;
+    private TextView orderPreviewTitle;
+    private TextView orderPreviewMeta;
 
     private String selectedProfileId;
     private MaterialSwitch color,duplex,localCorrection,c4;
@@ -207,56 +214,185 @@ public class OutboxActivity extends AppCompatActivity {
             working.clear();
             for(OutboxItem i:allItems)if(selectedIds.contains(i.id))working.add(i);
             if(working.isEmpty()){DebugUtil.error(this,next,"Bitte mindestens eine PDF auswählen.");return;}
-            step=2;prepareMerged(false);renderStep();
+            previewIndex=0;
+            step=2;
+            renderStep();
         });
         LinearLayout.LayoutParams nlp=new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,56));nlp.setMargins(0,UiKit.dp(this,10),0,0);root.addView(next,nlp);
     }
 
     private void renderOrder(){
-        stepHeader("2","Reihenfolge & Vorschau","Ordne die ausgewählten PDFs. Entfernen nimmt eine Datei nur aus diesem Versand, nicht aus dem Druckausgang.");
+        stepHeader("2","Reihenfolge & Vorschau","Blättere durch die ausgewählten PDFs und ziehe sie unten an der Griffleiste in die gewünschte Reihenfolge.");
 
-        LinearLayout previewCard=new LinearLayout(this);previewCard.setOrientation(LinearLayout.VERTICAL);
-        previewCard.addView(UiKit.heading(this,"Erste Vorschau",17));
-        ImageView preview=new ImageView(this);preview.setAdjustViewBounds(true);preview.setContentDescription("Vorschau der zusammengeführten PDF");
-        if(previewBitmap!=null)preview.setImageBitmap(previewBitmap);
-        previewCard.addView(preview,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,330)));
-        int pages=merged==null?working.stream().mapToInt(i->PdfMergeUtil.countPages(this,i.asUri())).sum():PdfMergeUtil.countPages(merged);
-        previewCard.addView(UiKit.body(this,working.size()+" PDF"+(working.size()==1?"":"s")+" · "+pages+" Seite"+(pages==1?"":"n")));
+        if(working.isEmpty()){
+            TextView empty=UiKit.body(this,"Keine PDFs für diesen Versand ausgewählt.");
+            root.addView(UiKit.surfaceCard(this,empty));
+            return;
+        }
+
+        previewIndex=Math.max(0,Math.min(previewIndex,working.size()-1));
+
+        LinearLayout previewCard=new LinearLayout(this);
+        previewCard.setOrientation(LinearLayout.VERTICAL);
+
+        LinearLayout previewHead=new LinearLayout(this);
+        previewHead.setGravity(Gravity.CENTER_VERTICAL);
+        orderPreviewTitle=UiKit.heading(this,"",17);
+        previewHead.addView(orderPreviewTitle,new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1f));
+        orderPreviewMeta=UiKit.body(this,"");
+        orderPreviewMeta.setTextSize(12);
+        previewHead.addView(orderPreviewMeta);
+        previewCard.addView(previewHead);
+
+        orderPreviewImage=new ImageView(this);
+        orderPreviewImage.setAdjustViewBounds(true);
+        orderPreviewImage.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        orderPreviewImage.setBackgroundColor(android.graphics.Color.WHITE);
+        orderPreviewImage.setContentDescription("Vorschau der aktuell ausgewählten PDF");
+        previewCard.addView(orderPreviewImage,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,360)));
+
+        LinearLayout pager=new LinearLayout(this);
+        pager.setGravity(Gravity.CENTER_VERTICAL);
+        ImageView previous=new ImageView(this);
+        previous.setImageResource(R.drawable.ic_chevron_left);
+        previous.setColorFilter(SettingsStore.primary(this));
+        previous.setContentDescription("Vorherige PDF");
+        previous.setPadding(UiKit.dp(this,12),UiKit.dp(this,12),UiKit.dp(this,12),UiKit.dp(this,12));
+        previous.setOnClickListener(v->{
+            if(previewIndex>0){previewIndex--;loadOrderPreview();}
+        });
+        pager.addView(previous,new LinearLayout.LayoutParams(UiKit.dp(this,52),UiKit.dp(this,52)));
+
+        TextView pagerText=UiKit.body(this,"Durch die PDFs blättern");
+        pagerText.setGravity(Gravity.CENTER);
+        pager.addView(pagerText,new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1f));
+
+        ImageView nextPreview=new ImageView(this);
+        nextPreview.setImageResource(R.drawable.ic_chevron_right);
+        nextPreview.setColorFilter(SettingsStore.primary(this));
+        nextPreview.setContentDescription("Nächste PDF");
+        nextPreview.setPadding(UiKit.dp(this,12),UiKit.dp(this,12),UiKit.dp(this,12),UiKit.dp(this,12));
+        nextPreview.setOnClickListener(v->{
+            if(previewIndex<working.size()-1){previewIndex++;loadOrderPreview();}
+        });
+        pager.addView(nextPreview,new LinearLayout.LayoutParams(UiKit.dp(this,52),UiKit.dp(this,52)));
+        previewCard.addView(pager);
+
         root.addView(UiKit.surfaceCard(this,previewCard));
+        loadOrderPreview();
 
-        for(int i=0;i<working.size();i++)root.addView(orderCard(i,working.get(i)));
+        TextView sortTitle=UiKit.heading(this,"Reihenfolge",17);
+        sortTitle.setPadding(0,UiKit.dp(this,10),0,UiKit.dp(this,4));
+        root.addView(sortTitle);
+
+        LinearLayout compactList=new LinearLayout(this);
+        compactList.setOrientation(LinearLayout.VERTICAL);
+        for(int i=0;i<working.size();i++)compactList.addView(compactOrderRow(i,working.get(i)));
+        root.addView(UiKit.surfaceCard(this,compactList));
 
         MaterialButton next=UiKit.primary(this,"Versand vorbereiten");
         next.setOnClickListener(v->{
             if(working.isEmpty()){DebugUtil.error(this,next,"Keine PDF für diesen Versand ausgewählt.");return;}
+            next.setEnabled(false);
+            next.setText("PDFs werden verbunden…");
             prepareMerged(true);
         });
-        LinearLayout.LayoutParams nlp=new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,56));nlp.setMargins(0,UiKit.dp(this,10),0,0);root.addView(next,nlp);
+        LinearLayout.LayoutParams nlp=new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,56));
+        nlp.setMargins(0,UiKit.dp(this,12),0,UiKit.dp(this,8));
+        root.addView(next,nlp);
     }
 
-    private View orderCard(int index,OutboxItem item){
-        LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);
-        LinearLayout titleRow=new LinearLayout(this);titleRow.setGravity(Gravity.CENTER_VERTICAL);
-        TextView number=UiKit.heading(this,String.valueOf(index+1),18);number.setGravity(Gravity.CENTER);
-        titleRow.addView(number,new LinearLayout.LayoutParams(UiKit.dp(this,36),UiKit.dp(this,44)));
-        TextView title=UiKit.heading(this,item.name,15);title.setMaxLines(2);
-        titleRow.addView(title,new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1f));
-        box.addView(titleRow);
+    private void loadOrderPreview(){
+        if(orderPreviewImage==null||working.isEmpty())return;
+        int index=Math.max(0,Math.min(previewIndex,working.size()-1));
+        OutboxItem item=working.get(index);
+        orderPreviewTitle.setText(item.name);
+        int pages=PdfMergeUtil.countPages(this,item.asUri());
+        orderPreviewMeta.setText((index+1)+" / "+working.size()+" · "+pages+" Seite"+(pages==1?"":"n"));
+        orderPreviewImage.setImageDrawable(null);
 
-        LinearLayout actions=new LinearLayout(this);actions.setGravity(Gravity.CENTER);
-        MaterialButton up=UiKit.tonal(this,"Nach oben");up.setEnabled(index>0);
-        up.setOnClickListener(v->{Collections.swap(working,index,index-1);prepareMerged(false);renderStep();});
-        actions.addView(up,new LinearLayout.LayoutParams(0,UiKit.dp(this,46),1f));
-        actions.addView(new View(this),new LinearLayout.LayoutParams(UiKit.dp(this,8),1));
-        MaterialButton down=UiKit.tonal(this,"Nach unten");down.setEnabled(index<working.size()-1);
-        down.setOnClickListener(v->{Collections.swap(working,index,index+1);prepareMerged(false);renderStep();});
-        actions.addView(down,new LinearLayout.LayoutParams(0,UiKit.dp(this,46),1f));
-        box.addView(actions);
+        new Thread(()->{
+            try{
+                Bitmap bitmap=PdfPreviewRenderer.renderFirstPage(this,item.asUri(),900,PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
+                runOnUiThread(()->{
+                    if(orderPreviewImage==null||index!=previewIndex){
+                        if(!bitmap.isRecycled())bitmap.recycle();
+                        return;
+                    }
+                    orderPreviewImage.setImageBitmap(bitmap);
+                });
+            }catch(Exception e){
+                runOnUiThread(()->DebugUtil.error(this,orderPreviewImage,"PDF-Vorschau",e));
+            }
+        },"order-preview").start();
+    }
 
-        MaterialButton remove=UiKit.tonal(this,"Aus diesem Versand entfernen");
-        remove.setOnClickListener(v->{working.remove(index);prepareMerged(false);renderStep();});
-        LinearLayout.LayoutParams rlp=new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,46));rlp.setMargins(0,UiKit.dp(this,8),0,0);box.addView(remove,rlp);
-        return UiKit.surfaceCard(this,box);
+    private View compactOrderRow(int index,OutboxItem item){
+        LinearLayout row=new LinearLayout(this);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(UiKit.dp(this,4),UiKit.dp(this,4),UiKit.dp(this,4),UiKit.dp(this,4));
+        row.setTag(index);
+
+        ImageView handle=new ImageView(this);
+        handle.setImageResource(R.drawable.ic_drag_handle);
+        handle.setColorFilter(UiKit.resolveSecondaryText(this));
+        handle.setContentDescription("PDF verschieben");
+        handle.setPadding(UiKit.dp(this,9),UiKit.dp(this,9),UiKit.dp(this,9),UiKit.dp(this,9));
+        handle.setOnLongClickListener(v->{
+            ClipData data=ClipData.newPlainText("fromIndex",String.valueOf(index));
+            v.startDragAndDrop(data,new View.DragShadowBuilder(row),index,0);
+            return true;
+        });
+        row.addView(handle,new LinearLayout.LayoutParams(UiKit.dp(this,48),UiKit.dp(this,48)));
+
+        LinearLayout text=new LinearLayout(this);
+        text.setOrientation(LinearLayout.VERTICAL);
+        TextView name=UiKit.heading(this,item.name,14);
+        name.setMaxLines(1);
+        name.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        text.addView(name);
+        TextView pos=UiKit.body(this,"Position "+(index+1));
+        pos.setTextSize(11);
+        text.addView(pos);
+        row.addView(text,new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1f));
+
+        ImageView remove=new ImageView(this);
+        remove.setImageResource(R.drawable.ic_delete_small);
+        remove.setColorFilter(0xFFB3261E);
+        remove.setContentDescription("Aus diesem Versand entfernen");
+        remove.setPadding(UiKit.dp(this,10),UiKit.dp(this,10),UiKit.dp(this,10),UiKit.dp(this,10));
+        remove.setOnClickListener(v->{
+            int current=working.indexOf(item);
+            if(current>=0){
+                working.remove(current);
+                if(previewIndex>=working.size())previewIndex=Math.max(0,working.size()-1);
+                renderStep();
+            }
+        });
+        row.addView(remove,new LinearLayout.LayoutParams(UiKit.dp(this,48),UiKit.dp(this,48)));
+
+        row.setOnDragListener((v,event)->{
+            if(event.getAction()==DragEvent.ACTION_DROP){
+                Object state=event.getLocalState();
+                if(!(state instanceof Integer))return false;
+                int from=(Integer)state;
+                int to=working.indexOf(item);
+                if(from<0||from>=working.size()||to<0||to>=working.size()||from==to)return true;
+                OutboxItem moved=working.remove(from);
+                if(from<to)to--;
+                working.add(Math.max(0,Math.min(to,working.size())),moved);
+                previewIndex=working.indexOf(moved);
+                renderStep();
+                return true;
+            }
+            return event.getAction()==DragEvent.ACTION_DRAG_STARTED||
+                    event.getAction()==DragEvent.ACTION_DRAG_ENTERED||
+                    event.getAction()==DragEvent.ACTION_DRAG_LOCATION||
+                    event.getAction()==DragEvent.ACTION_DRAG_EXITED||
+                    event.getAction()==DragEvent.ACTION_DRAG_ENDED;
+        });
+
+        return row;
     }
 
     private void prepareMerged(boolean advance){
@@ -357,6 +493,7 @@ public class OutboxActivity extends AppCompatActivity {
 
     private boolean compatible(Profile p,JobOptions o){
         if(!p.active)return false;
+        if(DebugProfileManager.isDebug(p))return true;
         if(Profile.PROVIDER_POST.equals(p.provider)){
             if(o.c4)return false;
             if(p.color!=o.color||p.duplex!=o.duplex)return false;
@@ -390,7 +527,9 @@ public class OutboxActivity extends AppCompatActivity {
             found=true;
             LinearLayout card=new LinearLayout(this);card.setOrientation(LinearLayout.VERTICAL);
             LinearLayout row=new LinearLayout(this);row.setGravity(Gravity.CENTER_VERTICAL);
-            ImageView logo=new ImageView(this);logo.setImageResource(Profile.PROVIDER_LETTERXPRESS.equals(p.provider)?R.drawable.ic_provider_lxp:R.drawable.ic_provider_post);
+            ImageView logo=new ImageView(this);
+            logo.setImageResource(DebugProfileManager.isDebug(p)?R.drawable.ic_provider_debug:
+                    Profile.PROVIDER_LETTERXPRESS.equals(p.provider)?R.drawable.ic_provider_lxp:R.drawable.ic_provider_post);
             row.addView(logo,new LinearLayout.LayoutParams(UiKit.dp(this,40),UiKit.dp(this,40)));
             RadioButton rb=new RadioButton(this);rb.setId(View.generateViewId());rb.setTag(p.id);
             rb.setText(p.name);rb.setTextSize(16);
@@ -399,7 +538,10 @@ public class OutboxActivity extends AppCompatActivity {
             row.addView(rb,new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1f));
             card.addView(row);
 
-            TextView route=UiKit.body(this,Profile.PROVIDER_LETTERXPRESS.equals(p.provider)?"LetterXpress · "+(Profile.TYPE_LXP_API.equals(p.type)?"API":"SFTP"):"Deutsche Post · "+(Profile.TYPE_IPP.equals(p.type)?"IPP":"WebDAV"));
+            String routeText=DebugProfileManager.isDebug(p)?"Lokale Debug-Ausgabe":
+                    Profile.PROVIDER_LETTERXPRESS.equals(p.provider)?"LetterXpress · "+(Profile.TYPE_LXP_API.equals(p.type)?"API":"SFTP"):
+                            "Deutsche Post · "+(Profile.TYPE_IPP.equals(p.type)?"IPP":"WebDAV");
+            TextView route=UiKit.body(this,routeText);
             route.setTextSize(12);route.setPadding(UiKit.dp(this,48),0,0,0);card.addView(route);
             TextView price=UiKit.body(this,"Kosten werden ermittelt…");price.setPadding(UiKit.dp(this,48),UiKit.dp(this,4),0,0);card.addView(price);
             loadPrice(p,o,pages,price);
@@ -427,6 +569,10 @@ public class OutboxActivity extends AppCompatActivity {
     }
 
     private void loadPrice(Profile p,JobOptions o,int pages,TextView target){
+        if(DebugProfileManager.isDebug(p)){
+            target.setText("Kostenlos · lokale Testausgabe");
+            return;
+        }
         if(Profile.PROVIDER_POST.equals(p.provider)){
             target.setText("Preis wird vom E-POST-Ziel bestimmt");return;
         }
@@ -478,7 +624,7 @@ public class OutboxActivity extends AppCompatActivity {
             addressPreview.setInteractive(false);
         }
 
-        RectF reserved=AddressLayoutRules.reserved(p,o);
+        RectF reserved=DebugProfileManager.isDebug(p)?new RectF():AddressLayoutRules.reserved(p,o);
         addressPreview.setReservedArea(reserved,reserved.isEmpty()?null:"Reserviert für Frankierung");
 
         if(Profile.PROVIDER_POST.equals(p.provider)&&p.addressCorrection&&correctionRequested){
@@ -556,8 +702,24 @@ public class OutboxActivity extends AppCompatActivity {
                     corrected=AddressCorrectionProcessor.apply(this,source,sourceSender,sourceRecipient,targetSender,targetRecipient);
                     outgoing=corrected;
                 }
-                ProviderSender.send(this,Uri.fromFile(outgoing),p,o);
-                int deleteFailures=OutboxStore.removeSent(this,sentItems);
+                if(DebugProfileManager.isDebug(p)){
+                    StringBuilder debugInfo=new StringBuilder();
+                    debugInfo.append("profile=").append(p.name).append('\n');
+                    debugInfo.append("provider=debug\n");
+                    debugInfo.append("pdfCount=").append(sentItems.size()).append('\n');
+                    debugInfo.append("pageCount=").append(PdfMergeUtil.countPages(outgoing)).append('\n');
+                    debugInfo.append("addressEdited=").append(addressEdited).append('\n');
+                    debugInfo.append("sourceSender=").append(AddressCorrectionProcessor.encode(sourceSender)).append('\n');
+                    debugInfo.append("sourceRecipient=").append(AddressCorrectionProcessor.encode(sourceRecipient)).append('\n');
+                    debugInfo.append("targetSender=").append(AddressCorrectionProcessor.encode(targetSender)).append('\n');
+                    debugInfo.append("targetRecipient=").append(AddressCorrectionProcessor.encode(targetRecipient)).append('\n');
+                    for(int i=0;i<sentItems.size();i++)
+                        debugInfo.append("input[").append(i).append("]=").append(sentItems.get(i).name).append('\n');
+                    DebugSender.send(this,Uri.fromFile(outgoing),o,debugInfo.toString());
+                }else{
+                    ProviderSender.send(this,Uri.fromFile(outgoing),p,o);
+                }
+                int deleteFailures=DebugProfileManager.isDebug(p)?0:OutboxStore.removeSent(this,sentItems);
                 File finalCorrected=corrected;
                 runOnUiThread(()->{
                     if(finalCorrected!=null)finalCorrected.delete();
