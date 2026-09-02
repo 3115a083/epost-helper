@@ -55,6 +55,12 @@ public class MainActivity extends AppCompatActivity {
         SettingsStore.applySavedAppearance(this);
         super.onCreate(b);
         if(b!=null)currentTab=b.getInt("currentTab",0);
+        Uri incoming=getIntent().getData();
+        if(Intent.ACTION_VIEW.equals(getIntent().getAction())&&incoming!=null){
+            try{getContentResolver().takePersistableUriPermission(incoming,Intent.FLAG_GRANT_READ_URI_PERMISSION);}catch(Exception ignored){}
+            OutboxStore.add(this,incoming,incoming.getLastPathSegment(),false);
+            currentTab=1;
+        }
         buildShell();
         setupBackNavigation();
         OutboxStore.importFolder(this);
