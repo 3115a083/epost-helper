@@ -26,6 +26,7 @@ public final class AddressConfigView extends View {
     private String reservedLabel="Reservierter Bereich";
     private boolean resizing=false;
     private boolean snapEnabled=true;
+    private boolean interactive=true;
     private float downX,downY;
     private float startLeft,startTop,startRight,startBottom;
     private Listener listener;
@@ -59,6 +60,7 @@ public final class AddressConfigView extends View {
     }
 
     public boolean isSnapEnabled(){ return snapEnabled; }
+    public void setInteractive(boolean enabled){interactive=enabled;invalidate();}
 
     public void setReservedArea(RectF area,String label){
         if(area==null||area.isEmpty()){reserved.setEmpty();showReserved=false;}
@@ -172,7 +174,7 @@ public final class AddressConfigView extends View {
     }
 
     @Override public boolean onTouchEvent(MotionEvent e){
-        if(pageBitmap==null||imageRect.isEmpty()) return true;
+        if(pageBitmap==null||imageRect.isEmpty()||!interactive) return true;
 
         if(e.getAction()==MotionEvent.ACTION_DOWN){
             RectF senderPx=toPixels(sender);
