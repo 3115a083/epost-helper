@@ -203,7 +203,7 @@ public class ProfileEditActivity extends AppCompatActivity {
                     profile.connectionVerifiedAt=System.currentTimeMillis();
                     profile.lastConnectionMessage=e.getMessage()==null?"Unbekannter Fehler":e.getMessage();
                     try{persistProfile();}catch(Exception ignored){}
-                    DebugUtil.error(this,anchor,"Prüfung fehlgeschlagen: "+profile.lastConnectionMessage);
+                    DebugUtil.error(this,anchor,"Verbindung prüfen",e);
                 });
             }
         },"epost-connection-test").start();
