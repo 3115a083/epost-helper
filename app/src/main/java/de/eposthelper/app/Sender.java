@@ -77,7 +77,7 @@ public final class Sender {
                 .header("Content-Type","application/pdf").build();
         try(Response r=client.newCall(req).execute()){
             if(!r.isSuccessful()){
-                if(r.code()==401)throw new IllegalStateException(ConnectionTester.describe401("WebDAV",r));
+                if(r.code()==401)throw ConnectionTester.auth401("WebDAV","PUT",url,r);
                 throw new IllegalStateException("Sammelkorb meldet HTTP "+r.code());
             }
         }
@@ -92,7 +92,7 @@ public final class Sender {
                 .header("Content-Type","application/ipp").build();
         try(Response r=client.newCall(req).execute()){
             if(!r.isSuccessful()){
-                if(r.code()==401)throw new IllegalStateException(ConnectionTester.describe401("IPP",r));
+                if(r.code()==401)throw ConnectionTester.auth401("IPP","POST",httpsUrl,r);
                 throw new IllegalStateException("IPP-Ziel meldet HTTP "+r.code());
             }
             byte[] response=r.body()==null?new byte[0]:r.body().bytes();
