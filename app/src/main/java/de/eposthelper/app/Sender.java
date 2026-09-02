@@ -87,7 +87,7 @@ public final class Sender {
         String printerUri=p.url.trim();
         if(printerUri.startsWith("https://"))printerUri="ipps://"+printerUri.substring("https://".length());
         byte[] head=IppEncoder.printJobHeader(printerUri,p.username,"E-POST Helper");
-        Request req=auth(new Request.Builder().url(httpsUrl),p)
+        Request req=new Request.Builder().url(httpsUrl)
                 .post(pdfBody(context,pdf,IPP,head))
                 .header("Content-Type","application/ipp").build();
         try(Response r=client.newCall(req).execute()){
