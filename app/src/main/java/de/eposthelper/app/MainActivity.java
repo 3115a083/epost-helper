@@ -54,6 +54,7 @@ public class MainActivity extends AppCompatActivity {
     @Override protected void onCreate(Bundle b){
         SettingsStore.applySavedAppearance(this);
         super.onCreate(b);
+        SettingsStore.applyDynamicColors(this);
         if(b!=null)currentTab=b.getInt("currentTab",0);
         Uri incoming=getIntent().getData();
         if(Intent.ACTION_VIEW.equals(getIntent().getAction())&&incoming!=null){
