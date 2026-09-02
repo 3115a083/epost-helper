@@ -153,32 +153,71 @@ public final class LetterXpressApiClient {
         return data.optDouble("price",-1);
     }
 
-    private static byte[] readPdf(Context c,Uri uri) throws Exception{
-        try(InputStream in=c.getContentResolver().openInputStream(uri);ByteArrayOutputStream out=new ByteArrayOutputStream()){
+    private static final class NullOutput extends java.io.OutputStream{
+        @Override public void write(int b){}
+        @Override public void write(byte[] b,int off,int len){}
+    }
+
+    private static String base64Md5AndValidate(Context c,Uri uri) throws Exception{
+        MessageDigest md=MessageDigest.getInstance("MD5");
+        java.security.DigestOutputStream digest=new java.security.DigestOutputStream(new NullOutput(),md);
+        android.util.Base64OutputStream b64=new android.util.Base64OutputStream(digest,Base64.NO_WRAP|Base64.NO_CLOSE);
+        long total=0;
+        try(InputStream in=c.getContentResolver().openInputStream(uri)){
             if(in==null)throw new IllegalStateException("PDF kann nicht geöffnet werden");
-            byte[] buf=new byte[64*1024];int n;long total=0;
+            byte[] buf=new byte[64*1024];int n;
             while((n=in.read(buf))!=-1){
-                total+=n;if(total>MAX)throw new IllegalArgumentException("LetterXpress API erlaubt maximal 50 MB pro PDF.");
-                out.write(buf,0,n);
+                total+=n;
+                if(total>MAX)throw new IllegalArgumentException("LetterXpress API erlaubt maximal 50 MB pro PDF.");
+                b64.write(buf,0,n);
             }
-            return out.toByteArray();
+            b64.close();
         }
+        byte[] sum=md.digest();
+        StringBuilder hex=new StringBuilder();for(byte b:sum)hex.append(String.format("%02x",b&0xff));
+        return hex.toString();
     }
 
     public static void send(Context c,Uri pdf,Profile p,JobOptions o) throws Exception{
-        byte[] bytes=readPdf(c,pdf);
-        String encoded=Base64.encodeToString(bytes,Base64.NO_WRAP);
-        MessageDigest md=MessageDigest.getInstance("MD5");
-        byte[] sum=md.digest(encoded.getBytes(StandardCharsets.US_ASCII));
-        StringBuilder hex=new StringBuilder();for(byte b:sum)hex.append(String.format("%02x",b&0xff));
+        final String checksum=base64Md5AndValidate(c,pdf);
+        final String filename="epost-helper-"+System.currentTimeMillis()+".pdf";
+        final JSONObject authObject=auth(p,"live");
+        final JSONObject spec=specification(o,0);
+        final String reg=o.lxpRegistered();
 
-        JSONObject root=new JSONObject();root.put("auth",auth(p,"live"));
-        JSONObject letter=new JSONObject();
-        letter.put("base64_file",encoded);letter.put("base64_file_checksum",hex.toString());
-        letter.put("filename_original","epost-helper-"+System.currentTimeMillis()+".pdf");
-        letter.put("specification",specification(o,0));
-        String reg=o.lxpRegistered();if(!reg.isBlank())letter.put("registered",reg);
-        root.put("letter",letter);
-        post("/printjobs",root);
+        RequestBody streaming=new RequestBody(){
+            @Override public MediaType contentType(){return JSON;}
+            @Override public long contentLength(){return -1L;}
+            @Override public void writeTo(okio.BufferedSink sink) throws java.io.IOException{
+                try{
+                    String prefix="{\"auth\":"+authObject.toString()+",\"letter\":{\"base64_file\":\"";
+                    sink.writeUtf8(prefix);
+                    android.util.Base64OutputStream b64=new android.util.Base64OutputStream(sink.outputStream(),Base64.NO_WRAP|Base64.NO_CLOSE);
+                    try(InputStream in=c.getContentResolver().openInputStream(pdf)){
+                        if(in==null)throw new java.io.IOException("PDF kann nicht geöffnet werden");
+                        byte[] buf=new byte[64*1024];int n;
+                        while((n=in.read(buf))!=-1)b64.write(buf,0,n);
+                        b64.flush();
+                    }
+                    String suffix="\",\"base64_file_checksum\":\""+checksum+"\",\"filename_original\":"+JSONObject.quote(filename)+
+                            ",\"specification\":"+spec.toString()+
+                            (reg.isBlank()?"":",\"registered\":"+JSONObject.quote(reg))+
+                            "}}";
+                    sink.writeUtf8(suffix);
+                }catch(java.io.IOException e){throw e;}
+                catch(Exception e){throw new java.io.IOException(e);}
+            }
+        };
+
+        OkHttpClient client=new OkHttpClient();
+        Request req=new Request.Builder().url(BASE+"/printjobs").post(streaming).header("Content-Type","application/json").build();
+        try(Response response=client.newCall(req).execute()){
+            String raw=response.body()==null?"":response.body().string();
+            JSONObject out=raw.isBlank()?new JSONObject():new JSONObject(raw);
+            if(!response.isSuccessful()||out.optInt("status",response.code())>=400)
+                throw new DiagnosticException("LetterXpress-Anfrage fehlgeschlagen.",
+                        "provider=LetterXpress\ntransport=API\nhttpStatus="+response.code()+"\nendpoint=/printjobs\nmessage="+out.optString("message",""));
+        }
     }
+
 }
