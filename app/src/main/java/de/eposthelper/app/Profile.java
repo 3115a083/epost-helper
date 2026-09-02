@@ -21,6 +21,9 @@ public final class Profile {
     public String registeredMail = "Nein";
     public String recipientWindow = "";
     public String senderWindow = "";
+    public boolean connectionVerified = false;
+    public long connectionVerifiedAt = 0L;
+    public String lastConnectionMessage = "";
 
     public JSONObject toJson() throws JSONException {
         JSONObject o = new JSONObject();
@@ -28,6 +31,7 @@ public final class Profile {
         o.put("username", username); o.put("password", password); o.put("certificatePin", certificatePin);
         o.put("active", active); o.put("duplex", duplex); o.put("color", color);
         o.put("registeredMail", registeredMail); o.put("recipientWindow", recipientWindow); o.put("senderWindow", senderWindow);
+        o.put("connectionVerified", connectionVerified); o.put("connectionVerifiedAt", connectionVerifiedAt); o.put("lastConnectionMessage", lastConnectionMessage);
         return o;
     }
 
@@ -48,6 +52,9 @@ public final class Profile {
         if ("Rückschein".equals(p.registeredMail)) p.registeredMail = "Einschreiben Rückschein";
         p.recipientWindow = o.optString("recipientWindow", "");
         p.senderWindow = o.optString("senderWindow", "");
+        p.connectionVerified = o.optBoolean("connectionVerified", false);
+        p.connectionVerifiedAt = o.optLong("connectionVerifiedAt", 0L);
+        p.lastConnectionMessage = o.optString("lastConnectionMessage", "");
         return p;
     }
 }
