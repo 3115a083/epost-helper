@@ -192,8 +192,13 @@ public class ProfileEditActivity extends AppCompatActivity {
                     else{
                         if(profile.sshHostKey.isBlank()){
                             String fp=LetterXpressSftpClient.discoverFingerprint(profile);
-                            throw new DiagnosticException("SFTP-Fingerprint muss bestätigt werden.",
-                                    "provider=LetterXpress\ntransport=SFTP\nhost="+LetterXpressSftpClient.HOST+"\nport="+LetterXpressSftpClient.PORT+"\nsshHostKey="+fp);
+                            runOnUiThread(()->{
+                                sshKey.setText(fp);
+                                anchor.setEnabled(true);
+                                anchor.setText("Verbindung prüfen");
+                                android.widget.Toast.makeText(this,"SSH-Fingerprint ermittelt. Bitte prüfen und Profil speichern, danach erneut testen.",android.widget.Toast.LENGTH_LONG).show();
+                            });
+                            return;
                         }
                         result=LetterXpressSftpClient.test(profile);
                     }
