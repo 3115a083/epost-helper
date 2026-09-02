@@ -11,6 +11,7 @@ import android.view.View;
 
 public final class AddressConfigView extends View {
     private static final float TOP_FRACTION=0.34f;
+    private float visibleFraction=TOP_FRACTION;
     private static final float SNAP_X=0.105f;
     private static final float HANDLE=0.035f;
 
@@ -60,6 +61,8 @@ public final class AddressConfigView extends View {
     }
 
     public boolean isSnapEnabled(){ return snapEnabled; }
+    public void setFullPage(boolean fullPage){visibleFraction=fullPage?1f:TOP_FRACTION;requestLayout();invalidate();}
+    public boolean isFullPage(){return visibleFraction>=0.99f;}
     public void setInteractive(boolean enabled){interactive=enabled;invalidate();}
 
     public void setReservedArea(RectF area,String label){
@@ -99,12 +102,12 @@ public final class AddressConfigView extends View {
         if(pageBitmap==null){
             paint.setColor(UiKit.resolveSecondaryText(getContext()));
             paint.setTextSize(UiKit.dp(getContext(),15));
-            canvas.drawText("PDF auswählen, um das obere Drittel anzuzeigen.",UiKit.dp(getContext(),18),UiKit.dp(getContext(),40),paint);
+            canvas.drawText(visibleFraction>=0.99f?"PDF wird geladen…":"PDF auswählen, um den Briefkopf anzuzeigen.",UiKit.dp(getContext(),18),UiKit.dp(getContext(),40),paint);
             return;
         }
 
         float maxW=getWidth()-UiKit.dp(getContext(),20);
-        float sourceH=pageBitmap.getHeight()*TOP_FRACTION;
+        float sourceH=pageBitmap.getHeight()*visibleFraction;
         float ratio=maxW/pageBitmap.getWidth();
         float drawH=sourceH*ratio;
         float left=(getWidth()-maxW)/2f;
@@ -160,17 +163,17 @@ public final class AddressConfigView extends View {
     private RectF toPixels(RectF n){
         return new RectF(
                 imageRect.left+n.left*imageRect.width(),
-                imageRect.top+(n.top/TOP_FRACTION)*imageRect.height(),
+                imageRect.top+(n.top/visibleFraction)*imageRect.height(),
                 imageRect.left+n.right*imageRect.width(),
-                imageRect.top+(n.bottom/TOP_FRACTION)*imageRect.height());
+                imageRect.top+(n.bottom/visibleFraction)*imageRect.height());
     }
 
     private RectF toNormalized(RectF px){
         return new RectF(
                 (px.left-imageRect.left)/imageRect.width(),
-                ((px.top-imageRect.top)/imageRect.height())*TOP_FRACTION,
+                ((px.top-imageRect.top)/imageRect.height())*visibleFraction,
                 (px.right-imageRect.left)/imageRect.width(),
-                ((px.bottom-imageRect.top)/imageRect.height())*TOP_FRACTION);
+                ((px.bottom-imageRect.top)/imageRect.height())*visibleFraction);
     }
 
     @Override public boolean onTouchEvent(MotionEvent e){
@@ -193,7 +196,7 @@ public final class AddressConfigView extends View {
 
         if(e.getAction()==MotionEvent.ACTION_MOVE&&active!=null){
             float dx=(e.getX()-downX)/Math.max(1f,imageRect.width());
-            float dy=((e.getY()-downY)/Math.max(1f,imageRect.height()))*TOP_FRACTION;
+            float dy=((e.getY()-downY)/Math.max(1f,imageRect.height()))*visibleFraction;
 
             if(resizing){
                 active.right=Math.max(active.left+HANDLE,startRight+dx);
