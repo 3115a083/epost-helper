@@ -1,8 +1,10 @@
 package de.eposthelper.app;
 
+import android.app.Activity;
 import android.content.Context;
-import android.content.SharedPreferences;
 import androidx.appcompat.app.AppCompatDelegate;
+import com.google.android.material.color.DynamicColors;
+import com.google.android.material.color.MaterialColors;
 
 public final class SettingsStore {
     private static final String PREF="ui_settings";
@@ -19,31 +21,57 @@ public final class SettingsStore {
         c.getSharedPreferences(PREF,Context.MODE_PRIVATE).edit().putString(MODE,mode).apply();
         applyAppearance(mode);
     }
-    public static void applySavedAppearance(Context c){ applyAppearance(appearance(c)); }
+    public static void applySavedAppearance(Context c){applyAppearance(appearance(c));}
     private static void applyAppearance(String mode){
         int value=AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM;
-        if("light".equals(mode)) value=AppCompatDelegate.MODE_NIGHT_NO;
-        else if("dark".equals(mode)) value=AppCompatDelegate.MODE_NIGHT_YES;
+        if("light".equals(mode))value=AppCompatDelegate.MODE_NIGHT_NO;
+        else if("dark".equals(mode))value=AppCompatDelegate.MODE_NIGHT_YES;
         AppCompatDelegate.setDefaultNightMode(value);
     }
 
     public static String palette(Context c){
-        return c.getSharedPreferences(PREF,Context.MODE_PRIVATE).getString(PALETTE,"ocean");
+        return c.getSharedPreferences(PREF,Context.MODE_PRIVATE).getString(PALETTE,"material_you");
     }
     public static void setPalette(Context c,String palette){
         c.getSharedPreferences(PREF,Context.MODE_PRIVATE).edit().putString(PALETTE,palette).apply();
     }
+    public static boolean materialYou(Context c){return "material_you".equals(palette(c));}
+    public static void applyDynamicColors(Activity activity){
+        if(materialYou(activity))DynamicColors.applyToActivityIfAvailable(activity);
+    }
 
     public static int primary(Context c){
+        if(materialYou(c))return MaterialColors.getColor(c,com.google.android.material.R.attr.colorPrimary,0xFF2457E6);
         switch(palette(c)){
-            case "forest": return 0xFF287A61;
-            case "sunset": return 0xFFE76F51;
-            case "aurora": return 0xFF5B5BD6;
-            case "lavender": return 0xFF775DA6;
-            case "graphite": return 0xFF4D5562;
-            default: return 0xFF2457E6;
+            case "forest":return 0xFF287A61;
+            case "sunset":return 0xFFE76F51;
+            case "aurora":return 0xFF5B5BD6;
+            case "lavender":return 0xFF775DA6;
+            case "rose":return 0xFFB5486B;
+            case "sand":return 0xFF8A6D3B;
+            case "graphite":return 0xFF4D5562;
+            default:return 0xFF2457E6;
         }
     }
+
+    public static int secondary(Context c){
+        if(materialYou(c))return MaterialColors.getColor(c,com.google.android.material.R.attr.colorSecondary,0xFF2AC7A2);
+        switch(palette(c)){
+            case "forest":return 0xFF4AB985;
+            case "sunset":return 0xFFF2A65A;
+            case "aurora":return 0xFF2AC7A2;
+            case "lavender":return 0xFFA477D5;
+            case "rose":return 0xFFE28BA7;
+            case "sand":return 0xFFC7A768;
+            case "graphite":return 0xFF707985;
+            default:return 0xFF1BC56C;
+        }
+    }
+
+    public static int[] gradient(Context c){
+        return new int[]{primary(c),secondary(c)};
+    }
+
     public static boolean debugMode(Context c){
         return c.getSharedPreferences(PREF,Context.MODE_PRIVATE).getBoolean(DEBUG,false);
     }
@@ -56,16 +84,5 @@ public final class SettingsStore {
     }
     public static void setOutboxFolder(Context c,String uri){
         c.getSharedPreferences(PREF,Context.MODE_PRIVATE).edit().putString(OUTBOX_FOLDER,uri==null?"":uri).apply();
-    }
-
-    public static int[] gradient(Context c){
-        switch(palette(c)){
-            case "forest": return new int[]{0xFF216B57,0xFF4AB985};
-            case "sunset": return new int[]{0xFFE05D44,0xFFF2A65A};
-            case "aurora": return new int[]{0xFF4C56C9,0xFF2AC7A2};
-            case "lavender": return new int[]{0xFF6950A1,0xFFA477D5};
-            case "graphite": return new int[]{0xFF3F4650,0xFF707985};
-            default: return new int[]{0xFF1769C2,0xFF1BC56C};
-        }
     }
 }
