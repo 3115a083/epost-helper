@@ -58,17 +58,23 @@ public class OutboxActivity extends AppCompatActivity {
     private RectF targetSender=AddressLayoutRules.normalSender();
     private RectF targetRecipient=AddressLayoutRules.normalRecipient();
     private boolean addressEdited=false;
+    private boolean editorRequestedBySwitch=false;
 
     private final ActivityResultLauncher<Intent> addressEditor=registerForActivityResult(
             new ActivityResultContracts.StartActivityForResult(),result->{
-                if(result.getResultCode()!=RESULT_OK||result.getData()==null)return;
+                if(result.getResultCode()!=RESULT_OK||result.getData()==null){
+                    if(editorRequestedBySwitch&&localCorrection!=null)localCorrection.setChecked(false);
+                    editorRequestedBySwitch=false;
+                    return;
+                }
                 Intent data=result.getData();
                 sourceSender=AddressCorrectionProcessor.decode(data.getStringExtra(AddressEditActivity.EXTRA_SOURCE_SENDER));
                 sourceRecipient=AddressCorrectionProcessor.decode(data.getStringExtra(AddressEditActivity.EXTRA_SOURCE_RECIPIENT));
                 targetSender=AddressCorrectionProcessor.decode(data.getStringExtra(AddressEditActivity.EXTRA_TARGET_SENDER));
                 targetRecipient=AddressCorrectionProcessor.decode(data.getStringExtra(AddressEditActivity.EXTRA_TARGET_RECIPIENT));
-                addressEdited=!sourceSender.isEmpty()&&!sourceRecipient.isEmpty();
-                if(localCorrection!=null)localCorrection.setChecked(true);
+                addressEdited=!sourceSender.isEmpty()&&!sourceRecipient.isEmpty()&&!targetSender.isEmpty()&&!targetRecipient.isEmpty();
+                editorRequestedBySwitch=false;
+                if(localCorrection!=null&&!localCorrection.isChecked())localCorrection.setChecked(true);
                 Profile p=SecureStore.find(this,selectedProfileId);
                 applyLayoutForProfile(p,true);
             });
@@ -307,8 +313,8 @@ public class OutboxActivity extends AppCompatActivity {
         addressPreview.setInteractive(false);
         if(previewBitmap!=null)addressPreview.setBitmap(previewBitmap.copy(Bitmap.Config.ARGB_8888,false));
         addressPreview.setListener((sender,recipient)->{targetSender=new RectF(sender);targetRecipient=new RectF(recipient);updateLayoutHint();});
-        addressBox.addView(addressPreview,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,430)));
-        MaterialButton editLarge=UiKit.primary(this,"Groß bearbeiten");
+        addressBox.addView(addressPreview,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,560)));
+        MaterialButton editLarge=UiKit.primary(this,"Große Vorschau öffnen & bearbeiten");
         editLarge.setOnClickListener(v->openAddressEditor(editLarge));
         LinearLayout.LayoutParams elp=new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,54));elp.setMargins(0,UiKit.dp(this,10),0,0);
         addressBox.addView(editLarge,elp);
@@ -328,7 +334,10 @@ public class OutboxActivity extends AppCompatActivity {
         localCorrection.setOnCheckedChangeListener((b,checked)->{
             Profile p=SecureStore.find(this,selectedProfileId);
             applyLayoutForProfile(p,checked);
-            if(checked&&!addressEdited&&p!=null&&!AddressCorrectionProcessor.configured(p))openAddressEditor(b);
+            if(checked&&!addressEdited&&p!=null){
+                editorRequestedBySwitch=true;
+                openAddressEditor(b);
+            }
         });
 
         refreshProfiles();
@@ -444,38 +453,23 @@ public class OutboxActivity extends AppCompatActivity {
     private void applyLayoutForProfile(Profile p,boolean correctionRequested){
         if(addressPreview==null)return;
         JobOptions o=currentOptions();
+
         if(p==null){
             addressPreview.setReservedArea(null,null);
             addressPreview.setInteractive(false);
             localCorrection.setEnabled(false);
+            layoutHint.setText("Wähle zuerst ein kompatibles Versandprofil.");
             return;
         }
 
-        boolean remotePost=Profile.PROVIDER_POST.equals(p.provider)&&p.addressCorrection;
-        localCorrection.setEnabled(!remotePost);
-
-        if(remotePost){
-            localCorrection.setChecked(false);
-            RectF configuredS=AddressCorrectionProcessor.decode(p.senderWindow);
-            RectF configuredR=AddressCorrectionProcessor.decode(p.recipientWindow);
-            if(!configuredS.isEmpty()&&!configuredR.isEmpty()){
-                sourceSender=new RectF(configuredS);sourceRecipient=new RectF(configuredR);
-                addressPreview.setBoxes(sourceSender,sourceRecipient);
-            }
-            addressPreview.setReservedArea(null,null);
-            addressPreview.setInteractive(false);
-            layoutHint.setText("Dieses Deutsche-Post-Profil nutzt bereits serverseitige Adresskorrektur. Lokale Korrektur bleibt deshalb aus.");
-            return;
-        }
+        localCorrection.setEnabled(true);
 
         if(!addressEdited&&AddressCorrectionProcessor.configured(p)){
             sourceSender=AddressCorrectionProcessor.decode(p.senderWindow);
             sourceRecipient=AddressCorrectionProcessor.decode(p.recipientWindow);
         }
-        if(!addressEdited&&!AddressCorrectionProcessor.configured(p)){
-            sourceSender=AddressLayoutRules.normalSender();
-            sourceRecipient=AddressLayoutRules.normalRecipient();
-        }
+        if(!addressEdited&&sourceSender.isEmpty())sourceSender=AddressLayoutRules.normalSender();
+        if(!addressEdited&&sourceRecipient.isEmpty())sourceRecipient=AddressLayoutRules.normalRecipient();
 
         if(correctionRequested){
             if(!addressEdited){
@@ -483,15 +477,20 @@ public class OutboxActivity extends AppCompatActivity {
                 targetRecipient=AddressLayoutRules.targetRecipient(p,o);
             }
             addressPreview.setBoxes(targetSender,targetRecipient);
-            addressPreview.setInteractive(true);
+            addressPreview.setInteractive(false);
         }else{
             addressPreview.setBoxes(sourceSender,sourceRecipient);
             addressPreview.setInteractive(false);
         }
 
         RectF reserved=AddressLayoutRules.reserved(p,o);
-        addressPreview.setReservedArea(reserved,reserved.isEmpty()?null:"Reserviert für DV-Freimachung");
-        updateLayoutHint();
+        addressPreview.setReservedArea(reserved,reserved.isEmpty()?null:"Reserviert für Frankierung");
+
+        if(Profile.PROVIDER_POST.equals(p.provider)&&p.addressCorrection&&correctionRequested){
+            layoutHint.setText("Lokale Adresskorrektur ist eingeschaltet. Dieses Deutsche-Post-Profil ist zusätzlich als serverseitig korrigiert markiert. Prüfe in der großen Vorschau, ob dadurch eine Doppelkorrektur entstehen kann.");
+        }else{
+            updateLayoutHint();
+        }
     }
 
     private void openAddressEditor(View anchor){
@@ -503,6 +502,8 @@ public class OutboxActivity extends AppCompatActivity {
             sourceSender=AddressCorrectionProcessor.decode(p.senderWindow);
             sourceRecipient=AddressCorrectionProcessor.decode(p.recipientWindow);
         }
+        if(sourceSender.isEmpty())sourceSender=AddressLayoutRules.normalSender();
+        if(sourceRecipient.isEmpty())sourceRecipient=AddressLayoutRules.normalRecipient();
         if(!addressEdited){
             targetSender=AddressLayoutRules.targetSender(p,currentOptions());
             targetRecipient=AddressLayoutRules.targetRecipient(p,currentOptions());
@@ -539,10 +540,9 @@ public class OutboxActivity extends AppCompatActivity {
         if(merged==null||!merged.exists()){DebugUtil.error(this,button,"Die zusammengeführte PDF fehlt.");return;}
         JobOptions o=currentOptions();
 
-        boolean remotePost=Profile.PROVIDER_POST.equals(p.provider)&&p.addressCorrection;
-        boolean doCorrection=localCorrection.isChecked()&&!remotePost;
-        if(doCorrection&&!addressEdited&&!AddressCorrectionProcessor.configured(p)){
-            DebugUtil.error(this,button,"Öffne zuerst „Groß bearbeiten“ und bestätige die Originalbereiche dieses Briefes.");
+        boolean doCorrection=localCorrection.isChecked();
+        if(doCorrection&&!addressEdited){
+            DebugUtil.error(this,button,"Öffne zuerst die große Adressvorschau und bestätige Original- und Zielbereiche.");
             return;
         }
         if(addressPreview.hasCollision()&&!doCorrection){
