@@ -165,14 +165,17 @@ public class MainActivity extends AppCompatActivity {
         List<Profile> profiles=SecureStore.load(this);
         long connected=profiles.stream().filter(p->p.active&&p.connectionVerified).count();
         int queued=OutboxStore.load(this).size();
+        int[] g=SettingsStore.gradient(this);
 
-        if(connected==0){
-            int[] g=SettingsStore.gradient(this);
-            LinearLayout hero=new LinearLayout(this);hero.setOrientation(LinearLayout.VERTICAL);
-            hero.addView(UiKit.heroTitle(this,"Versand noch nicht eingerichtet",23));
-            hero.addView(UiKit.heroBody(this,"Lege ein Profil bei Deutsche Post oder LetterXpress an und prüfe die Verbindung."));
-            content.addView(UiKit.hero(this,hero,g[0],g[1]));
-        }
+        LinearLayout hero=new LinearLayout(this);hero.setOrientation(LinearLayout.VERTICAL);
+        hero.addView(UiKit.heroTitle(this,queued>0?queued+" PDF"+(queued==1?" wartet":"s warten"):"Bereit zum Briefversand",24));
+        String heroText=connected==0?"Noch kein verifiziertes Versandprofil.":connected+" verifizierte"+(connected==1?"s Profil":" Profile")+" · "+(queued==0?"Druckausgang leer":"Druckausgang bereit");
+        hero.addView(UiKit.heroBody(this,heroText));
+        MaterialButton heroAction=UiKit.primary(this,queued>0?"Druckausgang öffnen":"PDFs hinzufügen");
+        heroAction.setBackgroundTintList(ColorStateList.valueOf(0x33FFFFFF));
+        heroAction.setOnClickListener(v->startActivity(new Intent(this,OutboxActivity.class)));
+        LinearLayout.LayoutParams hap=new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,50));hap.setMargins(0,UiKit.dp(this,12),0,0);hero.addView(heroAction,hap);
+        content.addView(UiKit.hero(this,hero,g[0],g[1]));
 
         LinearLayout metrics=new LinearLayout(this);metrics.setOrientation(LinearLayout.HORIZONTAL);
         metrics.addView(metric("Verbindungen",String.valueOf(connected),"verifiziert"),new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1f));
@@ -183,11 +186,21 @@ public class MainActivity extends AppCompatActivity {
         Profile api=firstLetterXpressApi(profiles);
         if(api!=null){
             LinearLayout titleRow=new LinearLayout(this);titleRow.setGravity(Gravity.CENTER_VERTICAL);
-            titleRow.addView(section("Letzte LetterXpress-Sendungen"),new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1f));
-            MaterialButton refresh=UiKit.tonal(this,"Aktualisieren");refresh.setOnClickListener(v->{recentCache.clear();loadRecent(api,true);});
-            titleRow.addView(refresh,new LinearLayout.LayoutParams(UiKit.dp(this,118),UiKit.dp(this,44)));content.addView(titleRow);
+            TextView title=section("Letzte LetterXpress-Sendungen");
+            titleRow.addView(title,new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1f));
+            MaterialButton refresh=UiKit.tonal(this,"Aktualisieren");
+            refresh.setMinWidth(0);refresh.setInsetLeft(0);refresh.setInsetRight(0);
+            refresh.setOnClickListener(v->{recentCache.clear();loadRecent(api,true);});
+            titleRow.addView(refresh,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,UiKit.dp(this,44)));
+            content.addView(titleRow);
             recentContainer=new LinearLayout(this);recentContainer.setOrientation(LinearLayout.VERTICAL);content.addView(recentContainer);
             if(recentCache.isEmpty())loadRecent(api,false);else showRecent(recentCache);
+        }
+
+        boolean hasPost=profiles.stream().anyMatch(p->p.active&&Profile.PROVIDER_POST.equals(p.provider));
+        if(hasPost){
+            TextView note=UiKit.body(this,"Deutsche Post: Das E-POST-Journal ist derzeit nur im Geschäftskundenportal dokumentiert. Es gibt keinen veröffentlichten Journal-Endpunkt für eine sichere gemischte In-App-Historie.");
+            note.setTextSize(12);note.setPadding(0,UiKit.dp(this,12),0,0);content.addView(note);
         }
     }
 
@@ -264,18 +277,22 @@ public class MainActivity extends AppCompatActivity {
 
     private void renderPrint(){
         int queued=OutboxStore.load(this).size();
-        content.addView(section("Druckausgang"));
-        LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);
-        box.addView(UiKit.heading(this,queued==0?"Bereit für PDFs":queued+" PDF"+(queued==1?"":"s")+" warten",20));
-        TextView help=UiKit.body(this,"Mehrere PDFs verbinden, Reihenfolge festlegen, Vorschau prüfen und erst danach Versandprofil und Kosten vergleichen.");
-        help.setPadding(0,UiKit.dp(this,6),0,UiKit.dp(this,12));box.addView(help);
-        MaterialButton open=UiKit.primary(this,queued==0?"PDFs hinzufügen":"Druckausgang öffnen");
-        open.setOnClickListener(v->startActivity(new Intent(this,OutboxActivity.class)));box.addView(open);
-        content.addView(UiKit.surfaceCard(this,box));
+        int[] g=SettingsStore.gradient(this);
+        LinearLayout hero=new LinearLayout(this);hero.setOrientation(LinearLayout.VERTICAL);
+        hero.addView(UiKit.heroTitle(this,queued==0?"PDFs für den Versand sammeln":queued+" PDF"+(queued==1?" im Druckausgang":"s im Druckausgang"),23));
+        hero.addView(UiKit.heroBody(this,"Auswählen, zusammenführen, Vorschau prüfen, Versandoptionen festlegen und Profilkosten vergleichen."));
+        MaterialButton open=UiKit.primary(this,queued==0?"PDFs hinzufügen":"Druckausgang bearbeiten");
+        open.setBackgroundTintList(ColorStateList.valueOf(0x33FFFFFF));
+        open.setOnClickListener(v->startActivity(new Intent(this,OutboxActivity.class)));
+        LinearLayout.LayoutParams op=new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,52));op.setMargins(0,UiKit.dp(this,12),0,0);hero.addView(open,op);
+        content.addView(UiKit.hero(this,hero,g[0],g[1]));
 
         String folder=SettingsStore.outboxFolder(this);
-        TextView folderInfo=UiKit.body(this,folder.isBlank()?"Kein Auto-Import-Ordner eingerichtet.":"Auto-Import-Ordner aktiv. PDFs werden beim Öffnen der App übernommen und nach erfolgreichem Versand gelöscht.");
-        folderInfo.setTextSize(13);folderInfo.setPadding(0,UiKit.dp(this,8),0,0);content.addView(folderInfo);
+        LinearLayout info=new LinearLayout(this);info.setOrientation(LinearLayout.VERTICAL);
+        info.addView(UiKit.heading(this,"Automatischer Import",16));
+        TextView folderInfo=UiKit.body(this,folder.isBlank()?"Kein Importordner eingerichtet.":"Aktiver Ordner: "+folderDisplayName(folder));
+        folderInfo.setPadding(0,UiKit.dp(this,5),0,0);info.addView(folderInfo);
+        content.addView(UiKit.surfaceCard(this,info));
     }
 
     private void renderProfiles(){
@@ -303,9 +320,19 @@ public class MainActivity extends AppCompatActivity {
         return (Profile.PROVIDER_LETTERXPRESS.equals(p.provider)?"LetterXpress":"Deutsche Post")+" · "+route;
     }
 
+    private String folderDisplayName(String uri){
+        try{
+            androidx.documentfile.provider.DocumentFile f=androidx.documentfile.provider.DocumentFile.fromTreeUri(this,Uri.parse(uri));
+            if(f!=null&&f.getName()!=null&&!f.getName().isBlank())return f.getName()+"\n"+uri;
+        }catch(Exception ignored){}
+        return uri;
+    }
+
     private void renderSettings(){
         content.addView(section("Darstellung"));
+
         LinearLayout modeBox=new LinearLayout(this);modeBox.setOrientation(LinearLayout.VERTICAL);
+        modeBox.addView(UiKit.heading(this,"Erscheinungsbild",17));
         com.google.android.material.button.MaterialButtonToggleGroup modes=new com.google.android.material.button.MaterialButtonToggleGroup(this);
         modes.setSingleSelection(true);modes.setSelectionRequired(true);
         String[][] md={{"System","system"},{"Hell","light"},{"Dunkel","dark"}};
@@ -314,24 +341,46 @@ public class MainActivity extends AppCompatActivity {
             modes.addView(bt,new LinearLayout.LayoutParams(0,UiKit.dp(this,48),1f));
             if(m[1].equals(SettingsStore.appearance(this)))modes.check(bt.getId());
         }
-        modes.addOnButtonCheckedListener((g,id,checked)->{if(checked){View v=g.findViewById(id);if(v!=null)SettingsStore.setAppearance(this,String.valueOf(v.getTag()));}});
-        modeBox.addView(modes);content.addView(UiKit.surfaceCard(this,modeBox));
+        modes.addOnButtonCheckedListener((group,id,checked)->{
+            if(!checked)return;
+            View v=group.findViewById(id);
+            if(v!=null&&!String.valueOf(v.getTag()).equals(SettingsStore.appearance(this))){
+                SettingsStore.setAppearance(this,String.valueOf(v.getTag()));
+            }
+        });
+        modeBox.addView(modes);
+        content.addView(UiKit.surfaceCard(this,modeBox));
+
+        LinearLayout paletteBox=new LinearLayout(this);paletteBox.setOrientation(LinearLayout.VERTICAL);
+        paletteBox.addView(UiKit.heading(this,"Farbthema",17));
+        TextView paletteHelp=UiKit.body(this,"Material You übernimmt die Akzentfarben des Systems. Alternativ stehen feste, auf Light und Dark Mode abgestimmte Paletten bereit.");
+        paletteHelp.setTextSize(13);paletteHelp.setPadding(0,UiKit.dp(this,4),0,UiKit.dp(this,8));paletteBox.addView(paletteHelp);
+        com.google.android.material.chip.ChipGroup chips=new com.google.android.material.chip.ChipGroup(this);
+        chips.setSingleSelection(true);chips.setSelectionRequired(true);
+        String[][] palettes={{"Material You","material_you"},{"Ocean","ocean"},{"Forest","forest"},{"Sunset","sunset"},{"Aurora","aurora"},{"Lavender","lavender"},{"Rose","rose"},{"Sand","sand"},{"Graphite","graphite"}};
+        for(String[] p:palettes){
+            com.google.android.material.chip.Chip chip=new com.google.android.material.chip.Chip(this);
+            chip.setText(p[0]);chip.setTag(p[1]);chip.setCheckable(true);chip.setId(View.generateViewId());
+            chip.setChecked(p[1].equals(SettingsStore.palette(this)));
+            chip.setChipCornerRadius(UiKit.dp(this,18));
+            chip.setOnCheckedChangeListener((button,checked)->{
+                if(checked&&!String.valueOf(button.getTag()).equals(SettingsStore.palette(this))){
+                    SettingsStore.setPalette(this,String.valueOf(button.getTag()));
+                    recreate();
+                }
+            });
+            chips.addView(chip);
+        }
+        paletteBox.addView(chips);content.addView(UiKit.surfaceCard(this,paletteBox));
 
         content.addView(section("Druckausgang"));
         LinearLayout folderBox=new LinearLayout(this);folderBox.setOrientation(LinearLayout.VERTICAL);
-        TextView folder=UiKit.body(this,SettingsStore.outboxFolder(this).isBlank()?"Kein Ordner gewählt":"Auto-Import ist eingerichtet");
-        folderBox.addView(folder);
-        TextView explain=UiKit.body(this,"PDFs in diesem Ordner werden beim Start und Öffnen der App automatisch in den Druckausgang übernommen. Nach erfolgreichem Versand löscht die App nur diese automatisch importierten Quelldateien.");
-        explain.setTextSize(13);explain.setPadding(0,UiKit.dp(this,5),0,UiKit.dp(this,10));folderBox.addView(explain);
+        String folderUri=SettingsStore.outboxFolder(this);
+        folderBox.addView(UiKit.heading(this,folderUri.isBlank()?"Kein Importordner":"Aktueller Importordner",16));
+        TextView folder=UiKit.mono(this,folderUri.isBlank()?"PDF-Ordner auswählen, um Dateien automatisch in den Druckausgang zu übernehmen.":folderDisplayName(folderUri));
+        folder.setPadding(0,UiKit.dp(this,6),0,UiKit.dp(this,10));folderBox.addView(folder);
         MaterialButton choose=UiKit.tonal(this,"Ordner auswählen");choose.setOnClickListener(v->folderPicker.launch(null));folderBox.addView(choose);
         content.addView(UiKit.surfaceCard(this,folderBox));
-
-        content.addView(section("Diagnose"));
-        LinearLayout debugBox=new LinearLayout(this);debugBox.setOrientation(LinearLayout.VERTICAL);
-        com.google.android.material.materialswitch.MaterialSwitch debug=new com.google.android.material.materialswitch.MaterialSwitch(this);
-        debug.setText("Debugmodus");debug.setChecked(SettingsStore.debugMode(this));debug.setOnCheckedChangeListener((b,c)->SettingsStore.setDebugMode(this,c));debugBox.addView(debug);
-        TextView dh=UiKit.body(this,"Technische Fehler bleiben sichtbar und werden automatisch in die Zwischenablage kopiert.");dh.setTextSize(13);debugBox.addView(dh);
-        content.addView(UiKit.surfaceCard(this,debugBox));
 
         content.addView(section("Werkzeuge"));
         content.addView(actionCard(R.drawable.ic_nav_profiles,"Versandfeld-Assistent","Adressbereiche am eigenen PDF-Brieflayout festlegen",()->startActivity(new Intent(this,AddressConfigActivity.class))));
@@ -341,7 +390,17 @@ public class MainActivity extends AppCompatActivity {
         security.setTextSize(12);security.setPadding(0,UiKit.dp(this,14),0,UiKit.dp(this,18));content.addView(security);
 
         TextView vibe=UiKit.heading(this,"Vibecoded with ❤️",14);vibe.setGravity(Gravity.CENTER);content.addView(vibe);
-        TextView github=UiKit.body(this,"github.com/3115a083/epost-helper");github.setGravity(Gravity.CENTER);github.setTextColor(SettingsStore.primary(this));github.setPadding(0,UiKit.dp(this,5),0,UiKit.dp(this,12));
+        TextView github=UiKit.body(this,"github.com/3115a083/epost-helper");github.setGravity(Gravity.CENTER);github.setTextColor(SettingsStore.primary(this));github.setPadding(0,UiKit.dp(this,5),0,UiKit.dp(this,18));
         github.setOnClickListener(v->startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse("https://github.com/3115a083/epost-helper"))));content.addView(github);
+
+        content.addView(section("Debug"));
+        LinearLayout debugBox=new LinearLayout(this);debugBox.setOrientation(LinearLayout.VERTICAL);
+        com.google.android.material.materialswitch.MaterialSwitch debug=new com.google.android.material.materialswitch.MaterialSwitch(this);
+        debug.setText("Debugmodus");debug.setChecked(SettingsStore.debugMode(this));
+        debug.setOnCheckedChangeListener((button,checked)->SettingsStore.setDebugMode(this,checked));debugBox.addView(debug);
+        TextView dh=UiKit.body(this,"Technische Fehler bleiben sichtbar und werden automatisch in die Zwischenablage kopiert.");
+        dh.setTextSize(13);debugBox.addView(dh);
+        content.addView(UiKit.surfaceCard(this,debugBox));
     }
+
 }
