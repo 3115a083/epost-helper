@@ -44,7 +44,7 @@ public class AddressEditActivity extends AppCompatActivity {
     private TextView hint;
     private HorizontalScrollView horizontal;
     private Bitmap bitmap;
-    private float zoom=1.8f;
+    private float zoom=2.2f;
 
     @Override protected void onCreate(Bundle b){
         SettingsStore.applySavedAppearance(this);
@@ -87,7 +87,7 @@ public class AddressEditActivity extends AppCompatActivity {
         bar.addView(back,new LinearLayout.LayoutParams(UiKit.dp(this,54),UiKit.dp(this,54)));
         LinearLayout titles=new LinearLayout(this);titles.setOrientation(LinearLayout.VERTICAL);
         titles.addView(UiKit.heading(this,"Adresslayout bearbeiten",22));
-        TextView sub=UiKit.body(this,"Große Vorschau des Briefkopfs");sub.setTextSize(12);titles.addView(sub);
+        TextView sub=UiKit.body(this,"Vollbildbearbeitung des Briefkopfs");sub.setTextSize(12);titles.addView(sub);
         bar.addView(titles,new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1f));
         page.addView(bar);
 
@@ -114,7 +114,7 @@ public class AddressEditActivity extends AppCompatActivity {
 
         hint=UiKit.body(this,"");
         hint.setTextSize(13);
-        hint.setPadding(0,UiKit.dp(this,7),0,UiKit.dp(this,6));
+        hint.setPadding(0,UiKit.dp(this,7),0,UiKit.dp(this,8));
         controls.addView(hint);
 
         LinearLayout tools=new LinearLayout(this);tools.setGravity(Gravity.CENTER_VERTICAL);
@@ -125,11 +125,11 @@ public class AddressEditActivity extends AppCompatActivity {
 
         MaterialButton minus=UiKit.tonal(this,"−");
         minus.setContentDescription("Vorschau verkleinern");
-        minus.setOnClickListener(v->{zoom=Math.max(1.0f,zoom-0.3f);updateZoom();});
+        minus.setOnClickListener(v->{zoom=Math.max(1.2f,zoom-0.3f);updateZoom();});
         tools.addView(minus,new LinearLayout.LayoutParams(UiKit.dp(this,52),UiKit.dp(this,44)));
         MaterialButton plus=UiKit.tonal(this,"+");
         plus.setContentDescription("Vorschau vergrößern");
-        plus.setOnClickListener(v->{zoom=Math.min(2.7f,zoom+0.3f);updateZoom();});
+        plus.setOnClickListener(v->{zoom=Math.min(3.2f,zoom+0.3f);updateZoom();});
         tools.addView(plus,new LinearLayout.LayoutParams(UiKit.dp(this,52),UiKit.dp(this,44)));
         controls.addView(tools);
         page.addView(controls);
@@ -137,6 +137,7 @@ public class AddressEditActivity extends AppCompatActivity {
         horizontal=new HorizontalScrollView(this);
         horizontal.setFillViewport(false);
         horizontal.setHorizontalScrollBarEnabled(true);
+        horizontal.setOverScrollMode(View.OVER_SCROLL_ALWAYS);
         preview=new AddressConfigView(this);
         preview.setInteractive(true);
         preview.setSnapEnabled(false);
@@ -145,7 +146,7 @@ public class AddressEditActivity extends AppCompatActivity {
             else{targetSender=new RectF(sender);targetRecipient=new RectF(recipient);}
             updateHint();
         });
-        horizontal.addView(preview,new HorizontalScrollView.LayoutParams(UiKit.dp(this,720),ViewGroup.LayoutParams.MATCH_PARENT));
+        horizontal.addView(preview,new HorizontalScrollView.LayoutParams(getResources().getDisplayMetrics().widthPixels*2,ViewGroup.LayoutParams.MATCH_PARENT));
         page.addView(horizontal,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,0,1f));
 
         LinearLayout bottom=new LinearLayout(this);
