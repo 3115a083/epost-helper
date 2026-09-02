@@ -541,6 +541,10 @@ public class OutboxActivity extends AppCompatActivity {
 
         boolean remotePost=Profile.PROVIDER_POST.equals(p.provider)&&p.addressCorrection;
         boolean doCorrection=localCorrection.isChecked()&&!remotePost;
+        if(doCorrection&&!addressEdited&&!AddressCorrectionProcessor.configured(p)){
+            DebugUtil.error(this,button,"Öffne zuerst „Groß bearbeiten“ und bestätige die Originalbereiche dieses Briefes.");
+            return;
+        }
         if(addressPreview.hasCollision()&&!doCorrection){
             DebugUtil.error(this,button,"Adresslayout kollidiert mit einem reservierten Bereich. Korrigiere die Position vor dem Versand.");
             return;
