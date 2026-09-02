@@ -1,6 +1,5 @@
 package de.eposthelper.app;
 
-import android.graphics.Color;
 import android.os.Bundle;
 import android.text.InputType;
 import android.view.Gravity;
@@ -16,19 +15,22 @@ import androidx.appcompat.app.AppCompatActivity;
 
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.card.MaterialCardView;
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.materialswitch.MaterialSwitch;
 import com.google.android.material.snackbar.Snackbar;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.Executors;
 
 public class ProfileEditActivity extends AppCompatActivity {
     private Profile profile;
-    private EditText name,url,user,pass,pin,recipientWindow,senderWindow;
+    private EditText name,url,user,pass,pin;
     private Spinner type,registered;
     private MaterialSwitch active,duplex,color;
 
     @Override protected void onCreate(Bundle b){
+        SettingsStore.applySavedAppearance(this);
         super.onCreate(b);
         String id=getIntent().getStringExtra("profileId");
         profile=id==null?new Profile():SecureStore.find(this,id);
@@ -38,102 +40,132 @@ public class ProfileEditActivity extends AppCompatActivity {
 
     private EditText field(String label,String value,boolean secret){
         EditText e=new EditText(this);
-        e.setHint(label); e.setText(value); e.setTextSize(15);
-        e.setSingleLine(true); e.setPadding(UiKit.dp(this,14),UiKit.dp(this,12),UiKit.dp(this,14),UiKit.dp(this,12));
+        e.setHint(label); e.setText(value); e.setTextSize(15); e.setSingleLine(true);
+        e.setPadding(UiKit.dp(this,16),UiKit.dp(this,12),UiKit.dp(this,16),UiKit.dp(this,12));
         android.graphics.drawable.GradientDrawable bg=new android.graphics.drawable.GradientDrawable();
-        bg.setColor(UiKit.resolveSurface(this)); bg.setCornerRadius(UiKit.dp(this,18)); bg.setStroke(UiKit.dp(this,1),0x22000000);
+        bg.setColor(UiKit.resolveSurface(this));
+        bg.setCornerRadius(UiKit.dp(this,18));
+        bg.setStroke(UiKit.dp(this,1),androidx.core.graphics.ColorUtils.setAlphaComponent(UiKit.resolveSecondaryText(this),48));
         e.setBackground(bg);
         if(secret) e.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_VARIATION_PASSWORD);
         return e;
     }
 
     private void addField(LinearLayout root,EditText field){
-        LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,56));
-        lp.setMargins(0,UiKit.dp(this,6),0,UiKit.dp(this,6)); root.addView(field,lp);
+        LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,58));
+        lp.setMargins(0,UiKit.dp(this,6),0,UiKit.dp(this,6));
+        root.addView(field,lp);
     }
 
     private TextView label(String text){
-        TextView t=UiKit.body(this,text); t.setTextSize(12); t.setTypeface(android.graphics.Typeface.DEFAULT,android.graphics.Typeface.BOLD);
-        t.setPadding(0,UiKit.dp(this,8),0,UiKit.dp(this,4)); return t;
+        TextView t=UiKit.body(this,text);
+        t.setTextSize(12);
+        t.setTypeface(android.graphics.Typeface.DEFAULT,android.graphics.Typeface.BOLD);
+        t.setPadding(0,UiKit.dp(this,9),0,UiKit.dp(this,4));
+        return t;
     }
 
-    private MaterialCardView section(String title,LinearLayout body){
+    private MaterialCardView section(String title,String subtitle,LinearLayout body){
         LinearLayout box=new LinearLayout(this); box.setOrientation(LinearLayout.VERTICAL);
-        box.addView(UiKit.heading(this,title,17));
+        box.addView(UiKit.heading(this,title,18));
+        if(subtitle!=null&&!subtitle.isBlank()){
+            TextView s=UiKit.body(this,subtitle); s.setTextSize(13); s.setPadding(0,UiKit.dp(this,4),0,UiKit.dp(this,8)); box.addView(s);
+        }
         box.addView(body,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.WRAP_CONTENT));
         return UiKit.surfaceCard(this,box);
     }
 
     private void render(){
-        LinearLayout page=new LinearLayout(this); page.setOrientation(LinearLayout.VERTICAL); page.setBackgroundColor(UiKit.resolveSurface(this));
+        LinearLayout page=new LinearLayout(this);
+        page.setOrientation(LinearLayout.VERTICAL);
+        page.setBackgroundColor(UiKit.resolveSurface(this));
 
         LinearLayout top=new LinearLayout(this); top.setGravity(Gravity.CENTER_VERTICAL);
-        top.setPadding(UiKit.dp(this,10),UiKit.dp(this,10),UiKit.dp(this,16),UiKit.dp(this,10));
-        TextView back=new TextView(this); back.setText("‹"); back.setTextSize(34); back.setGravity(Gravity.CENTER); back.setContentDescription("Zurück");
-        back.setOnClickListener(v->finish()); top.addView(back,new LinearLayout.LayoutParams(UiKit.dp(this,54),UiKit.dp(this,54)));
-        TextView title=UiKit.heading(this,getIntent().hasExtra("profileId")?"Profil bearbeiten":"Neues Profil",22);
-        top.addView(title,new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1f));
+        top.setPadding(UiKit.dp(this,8),UiKit.dp(this,8),UiKit.dp(this,16),UiKit.dp(this,8));
+        TextView back=new TextView(this); back.setText("‹"); back.setTextSize(34); back.setGravity(Gravity.CENTER);
+        back.setContentDescription("Zurück"); back.setOnClickListener(v->finish());
+        top.addView(back,new LinearLayout.LayoutParams(UiKit.dp(this,54),UiKit.dp(this,54)));
+        top.addView(UiKit.heading(this,getIntent().hasExtra("profileId")?"Profil bearbeiten":"Neues Profil",22),
+                new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1f));
         page.addView(top);
 
         ScrollView scroll=new ScrollView(this);
         LinearLayout root=new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(UiKit.dp(this,18),0,UiKit.dp(this,18),UiKit.dp(this,28)); scroll.addView(root);
+        root.setPadding(UiKit.dp(this,18),0,UiKit.dp(this,18),UiKit.dp(this,30));
+        scroll.addView(root);
 
+        int[] grad=SettingsStore.gradient(this);
         LinearLayout hero=new LinearLayout(this); hero.setOrientation(LinearLayout.VERTICAL);
         LinearLayout heroHead=new LinearLayout(this); heroHead.setGravity(Gravity.CENTER_VERTICAL);
-        TextView icon=UiKit.heroTitle(this,"▣",34); heroHead.addView(icon,new LinearLayout.LayoutParams(UiKit.dp(this,50),UiKit.dp(this,50)));
+        TextView icon=UiKit.heroTitle(this,"✉",32); icon.setGravity(Gravity.CENTER);
+        heroHead.addView(icon,new LinearLayout.LayoutParams(UiKit.dp(this,54),UiKit.dp(this,54)));
         LinearLayout heroText=new LinearLayout(this); heroText.setOrientation(LinearLayout.VERTICAL);
         heroText.addView(UiKit.heroTitle(this,profile.name==null||profile.name.isBlank()?"Versandprofil":profile.name,20));
-        heroText.addView(UiKit.heroBody(this,Profile.TYPE_IPP.equals(profile.type)?"E-POST Netzwerkdrucker":"E-POST Sammelkorb"));
+        heroText.addView(UiKit.heroBody(this,Profile.TYPE_IPP.equals(profile.type)?"Netzwerkdrucker / IPP":"Sammelkorb / WebDAV"));
         heroHead.addView(heroText,new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1f));
-        TextView state=UiKit.pill(this,profile.active?"Aktiv":"Inaktiv",profile.active); heroHead.addView(state);
+        heroHead.addView(UiKit.pill(this,profile.active?"Aktiv":"Inaktiv",profile.active));
         hero.addView(heroHead);
-        root.addView(UiKit.hero(this,hero,0xFF3657D7,0xFF1CC66B));
+        root.addView(UiKit.hero(this,hero,grad[0],grad[1]));
 
         LinearLayout connection=new LinearLayout(this); connection.setOrientation(LinearLayout.VERTICAL);
-        name=field("Profilname",profile.name,false); addField(connection,name);
-        connection.addView(label("Verbindungstyp"));
-        type=new Spinner(this); String[] types={"Sammelkorb / WebDAV","Netzwerkdrucker / IPP"};
-        type.setAdapter(new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,types));
-        type.setSelection(Profile.TYPE_IPP.equals(profile.type)?1:0); connection.addView(type,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,52)));
-        url=field("HTTPS- oder IPPS-URL",profile.url,false); addField(connection,url);
-        root.addView(section("Verbindung",connection));
+        name=field("Profilname, z. B. Farbe beidseitig",profile.name,false); addField(connection,name);
+        connection.addView(label("Einlieferungsweg"));
+        type=new Spinner(this);
+        type.setAdapter(new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,
+                new String[]{"Sammelkorb / WebDAV","Netzwerkdrucker / IPP"}));
+        type.setSelection(Profile.TYPE_IPP.equals(profile.type)?1:0);
+        connection.addView(type,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,52)));
+        url=field("Vom Administrator bereitgestellte URL",profile.url,false); addField(connection,url);
+        root.addView(section("Verbindung","E-POST MAILER 7.0 verwendet für Sammelkörbe WebDAV und für Netzwerkdrucker IPP.",connection));
 
         LinearLayout credentials=new LinearLayout(this); credentials.setOrientation(LinearLayout.VERTICAL);
         user=field("Benutzername",profile.username,false); addField(credentials,user);
         pass=field("Passwort",profile.password,true); addField(credentials,pass);
-        pin=field("Optionaler Zertifikat-Pin, sha256/…",profile.certificatePin,false); addField(credentials,pin);
-        TextView pinHelp=UiKit.body(this,"Pinning ist optional. Ohne Pin gelten weiterhin System-CA und Hostname-Prüfung."); pinHelp.setTextSize(12); credentials.addView(pinHelp);
-        root.addView(section("Zugangsdaten & Sicherheit",credentials));
+        pin=field("Optionaler SPKI-Pin, sha256/…",profile.certificatePin,false); addField(credentials,pin);
+        TextView pinHelp=UiKit.body(this,"Die App akzeptiert nur HTTPS/IPPS. Ein Zertifikatsfehler kann nicht umgangen werden. Pinning verschärft die Prüfung zusätzlich.");
+        pinHelp.setTextSize(12); credentials.addView(pinHelp);
+        root.addView(section("Zugang & Sicherheit","Zugangsdaten werden verschlüsselt im Android Keystore gespeichert.",credentials));
 
         LinearLayout options=new LinearLayout(this); options.setOrientation(LinearLayout.VERTICAL);
         active=new MaterialSwitch(this); active.setText("Profil aktiv"); active.setChecked(profile.active); options.addView(active);
-        duplex=new MaterialSwitch(this); duplex.setText("Beidseitig"); duplex.setChecked(profile.duplex); options.addView(duplex);
-        color=new MaterialSwitch(this); color.setText("Farbe"); color.setChecked(profile.color); options.addView(color);
-        options.addView(label("Einschreiben"));
-        registered=new Spinner(this); String[] regs={"Nein","Einschreiben","Einwurf","Rückschein"};
+        duplex=new MaterialSwitch(this); duplex.setText("Profil ist beidseitig"); duplex.setChecked(profile.duplex); options.addView(duplex);
+        color=new MaterialSwitch(this); color.setText("Profil ist Farbdruck"); color.setChecked(profile.color); options.addView(color);
+        options.addView(label("Zusatzleistung"));
+        registered=new Spinner(this);
+        String[] regs={"Nein","Einschreiben","Einschreiben Einwurf","Einschreiben Rückschein"};
         registered.setAdapter(new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,regs));
         int idx=0; for(int i=0;i<regs.length;i++) if(regs[i].equals(profile.registeredMail))idx=i;
-        registered.setSelection(idx); options.addView(registered,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,52)));
-        root.addView(section("Versandart",options));
+        registered.setSelection(idx);
+        options.addView(registered,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,52)));
+        TextView optionHelp=UiKit.body(this,"Diese Merkmale dienen der Auswahl in Android. Die tatsächlichen Versandoptionen werden im E-POST-Ziel konfiguriert. Bei Sammelkörben liest die Verbindungsprüfung zusätzlich Info.txt.");
+        optionHelp.setTextSize(12); optionHelp.setPadding(0,UiKit.dp(this,8),0,0); options.addView(optionHelp);
+        root.addView(section("Versandprofil","Farbe, Duplex und Einschreiben werden vom jeweiligen E-POST-Ziel bestimmt.",options));
 
         LinearLayout address=new LinearLayout(this); address.setOrientation(LinearLayout.VERTICAL);
-        recipientWindow=field("Empfängerfenster, z. B. X+2 / Y-1 mm",profile.recipientWindow,false); addField(address,recipientWindow);
-        senderWindow=field("Absenderfenster, z. B. X0 / Y+1 mm",profile.senderWindow,false); addField(address,senderWindow);
-        TextView addressHelp=UiKit.body(this,"Diese Werte dokumentieren die serverseitige E-POST-Konfiguration. Das PDF selbst wird nicht verändert."); addressHelp.setTextSize(12); address.addView(addressHelp);
-        root.addView(section("Adressfenster",address));
+        TextView addressText=UiKit.body(this,"E-POST MAILER korrigiert Empfänger- und Absenderbereiche über seine Adresswerkzeuge und gespeicherte Vorlagen. Die App verändert deshalb keine PDF-Koordinaten und erzeugt keine eigene, inkompatible Adressverschiebung.");
+        addressText.setTextSize(13); address.addView(addressText);
+        root.addView(section("Adressfenster","Keine manuellen X/Y-Offsets mehr.",address));
+
+        MaterialButton test=UiKit.tonal(this,"Verbindung prüfen");
+        test.setOnClickListener(v->testConnection(test));
+        LinearLayout.LayoutParams tlp=new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,54));
+        tlp.setMargins(0,UiKit.dp(this,14),0,UiKit.dp(this,8)); root.addView(test,tlp);
 
         MaterialButton save=UiKit.primary(this,"Profil speichern");
         save.setOnClickListener(v->save(save));
-        LinearLayout.LayoutParams slp=new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,56)); slp.setMargins(0,UiKit.dp(this,14),0,UiKit.dp(this,8)); root.addView(save,slp);
+        root.addView(save,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,56)));
 
         if(getIntent().hasExtra("profileId")){
             MaterialButton delete=UiKit.tonal(this,"Profil löschen");
-            delete.setTextColor(0xFFB3261E); delete.setOnClickListener(v->delete(delete)); root.addView(delete);
+            delete.setTextColor(0xFFB3261E);
+            delete.setOnClickListener(v->delete(delete));
+            LinearLayout.LayoutParams dlp=new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,52));
+            dlp.setMargins(0,UiKit.dp(this,8),0,0); root.addView(delete,dlp);
         }
 
         page.addView(scroll,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,0,1f));
         setContentView(page);
+        SystemUi.apply(this,page);
     }
 
     private String text(EditText e){return e.getText()==null?"":e.getText().toString().trim();}
@@ -144,14 +176,39 @@ public class ProfileEditActivity extends AppCompatActivity {
         profile.url=text(url); profile.username=text(user); profile.password=text(pass); profile.certificatePin=text(pin);
         profile.active=active.isChecked(); profile.duplex=duplex.isChecked(); profile.color=color.isChecked();
         profile.registeredMail=String.valueOf(registered.getSelectedItem());
-        profile.recipientWindow=text(recipientWindow); profile.senderWindow=text(senderWindow);
+        profile.recipientWindow=""; profile.senderWindow="";
+    }
+
+    private boolean validate(){
+        collect();
+        if(profile.name.isBlank()){name.setError("Bitte einen Profilnamen eingeben.");return false;}
+        try{Sender.normalizeSecureUrl(profile.url);return true;}
+        catch(Exception e){url.setError(e.getMessage());return false;}
+    }
+
+    private void testConnection(MaterialButton anchor){
+        if(!validate())return;
+        anchor.setEnabled(false); anchor.setText("Prüfung läuft…");
+        Executors.newSingleThreadExecutor().execute(()->{
+            try{
+                String result=ConnectionTester.test(profile);
+                runOnUiThread(()->{
+                    anchor.setEnabled(true); anchor.setText("Verbindung prüfen");
+                    TextView tv=UiKit.mono(this,result); tv.setPadding(UiKit.dp(this,6),UiKit.dp(this,6),UiKit.dp(this,6),UiKit.dp(this,6));
+                    new MaterialAlertDialogBuilder(this).setTitle("Verbindung erfolgreich").setView(tv).setPositiveButton("OK",null).show();
+                });
+            }catch(Exception e){
+                runOnUiThread(()->{
+                    anchor.setEnabled(true); anchor.setText("Verbindung prüfen");
+                    Snackbar.make(anchor,"Prüfung fehlgeschlagen: "+(e.getMessage()==null?"Unbekannter Fehler":e.getMessage()),Snackbar.LENGTH_LONG).show();
+                });
+            }
+        });
     }
 
     private void save(MaterialButton anchor){
-        collect();
-        if(profile.name.isBlank()){name.setError("Bitte einen Profilnamen eingeben.");return;}
+        if(!validate())return;
         try{
-            Sender.normalizeSecureUrl(profile.url);
             List<Profile> list=new ArrayList<>(SecureStore.load(this));
             boolean replaced=false;
             for(int i=0;i<list.size();i++){
