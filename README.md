@@ -86,6 +86,30 @@ Create an API key in the LetterXpress customer area and enter the LetterXpress u
 
 LetterXpress SFTP uses `sftp.letterxpress.de` on port `279`. The app uses FILECODE filenames to transfer simplex/duplex, colour, national/international, C4 and registered-mail options. A pinned SSH host-key fingerprint is required before document upload. The connection test can discover the server fingerprint without accepting it for production transfer; compare it independently before storing it.
 
+## Android printing and outbox
+
+Every active profile appears as an Android printer. Android's standard print controls own color/monochrome and simplex/duplex. Provider-specific options such as registered mail and LetterXpress C4 are exposed through the advanced print options activity.
+
+The in-app outbox uses a three-step workflow:
+
+1. Select one or more PDFs already in the outbox.
+2. Reorder them, remove files from the current shipment and review the merged first-page preview.
+3. Choose print options, inspect or correct the address layout, compare compatible profiles and estimated prices, then send.
+
+A Storage Access Framework folder can be configured for automatic import. PDFs are imported when the app starts or resumes, so no permanent filesystem watcher or background service is required. Auto-imported source files are deleted only after successful submission. If Android refuses deletion, the URI is blocked from re-import to prevent accidental duplicate submission.
+
+## Address layout correction
+
+Profiles can store sender and recipient source rectangles from a representative PDF. During the final outbox step the app can locally reposition those areas before sending. Only the two small address regions are rasterized at print resolution; the rest of the PDF remains unchanged.
+
+For LetterXpress registered mail, the preview uses the current official registered-mail template geometry: sender zone at 20 mm / 45 mm, a 17 mm-high reserved DV-franking zone, and recipient zone below it. Collisions are shown in red. For Deutsche Post profiles marked as having server-side address correction enabled, local correction is disabled to avoid double correction.
+
+## Shipment history
+
+LetterXpress API profiles can show recent jobs, status and reported costs on the home screen.
+
+E-POST MAILER 7.0 documents its Journal only inside the Post & DHL business customer portal. No public Journal endpoint is documented for the WebDAV/IPP client workflow, so this app does not scrape the portal or store portal session credentials. A mixed Post/LetterXpress history will only be added if Deutsche Post provides a supported machine-readable Journal interface.
+
 ## Android advanced print options
 
 Each active profile appears as a printer. Android's advanced print options activity is used for per-document provider settings instead of creating a separate virtual printer for every option combination. Currently implemented per-job options are simplex/duplex, colour, supported registered-mail modes and LetterXpress C4. LetterXpress API profiles can show a provider price quote; SFTP profiles show a public-list-price estimate.
