@@ -312,6 +312,8 @@ public class OutboxActivity extends AppCompatActivity {
         addressPreview.setSnapEnabled(false);
         addressPreview.setInteractive(false);
         if(previewBitmap!=null)addressPreview.setBitmap(previewBitmap.copy(Bitmap.Config.ARGB_8888,false));
+        addressPreview.setOnClickListener(v->openAddressEditor(v));
+        addressPreview.setContentDescription("Adressvorschau. Antippen zum großen Bearbeiten.");
         addressPreview.setListener((sender,recipient)->{targetSender=new RectF(sender);targetRecipient=new RectF(recipient);updateLayoutHint();});
         addressBox.addView(addressPreview,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,560)));
         MaterialButton editLarge=UiKit.primary(this,"Große Vorschau öffnen & bearbeiten");
