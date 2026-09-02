@@ -46,6 +46,7 @@ public final class DebugSender {
         info.append("registered=").append(o.registered).append('\n');
         info.append("c4=").append(o.c4).append('\n');
         info.append("shipping=").append(o.shipping).append('\n');
+        info.append("pageCount=").append(PdfMergeUtil.countPages(c,pdf)).append('\n');
         info.append("addressCorrection=").append(o.addressCorrection).append('\n');
         if(extra!=null&&!extra.isBlank()){
             info.append('\n').append(extra.trim()).append('\n');
