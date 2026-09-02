@@ -57,6 +57,8 @@ public final class AddressCorrectionProcessor {
             int w=Math.max(1,Math.round(page.getWidth()*scale));
             int h=Math.max(1,Math.round(page.getHeight()*scale));
             pageBitmap=Bitmap.createBitmap(w,h,Bitmap.Config.ARGB_8888);
+            android.graphics.Canvas paper=new android.graphics.Canvas(pageBitmap);
+            paper.drawColor(android.graphics.Color.WHITE);
             page.render(pageBitmap,null,null,PdfRenderer.Page.RENDER_MODE_FOR_PRINT);
         }
 
