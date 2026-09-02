@@ -243,9 +243,9 @@ public class OutboxActivity extends AppCompatActivity {
         new Thread(()->{
             try{
                 ProviderSender.send(this,Uri.fromFile(file),p,JobOptions.fromProfile(p));
-                OutboxStore.removeSent(this,snapshot);
+                int deleteFailures=OutboxStore.removeSent(this,snapshot);
                 runOnUiThread(()->{
-                    Snackbar.make(button,"Versand erfolgreich übergeben.",Snackbar.LENGTH_LONG).show();
+                    Snackbar.make(button,deleteFailures==0?"Versand erfolgreich übergeben.":"Versand erfolgreich. "+deleteFailures+" Quelldatei(en) konnten nicht gelöscht werden und werden nicht erneut importiert.",Snackbar.LENGTH_LONG).show();
                     if(merged!=null){merged.delete();merged=null;}
                     reload();
                 });
