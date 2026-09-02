@@ -21,6 +21,15 @@ Cleartext `http://` and `ipp://` are rejected. Android cleartext networking is d
 
 Certificate pinning is optional because pins must be rotated before the service certificate changes.
 
+## E-POST MAILER 7.0 integration
+
+The implementation follows Deutsche Post's E-POST MAILER 7.0 user manual, version 7.0, March 2026.
+
+- **Sammelkorb:** WebDAV target using the administrator-provided URL and optional username/password. The connection test performs a WebDAV probe and reads `Info.txt` for the configured shipping options and `README.txt` for collection-basket instructions/series-letter separator when available.
+- **Netzwerkdrucker:** secure IPP request to the administrator-provided printer URL. The connection test performs an IPP Get-Printer-Attributes request before a profile is used.
+- **Shipping options:** colour, simplex/duplex and registered-mail variants are properties of the configured E-POST target. Local profile labels are selection aids; they do not pretend to override server configuration.
+- **Address correction:** E-POST MAILER 7.0 uses its address repositioning tool and saved correction templates. E-POST Helper therefore does not apply arbitrary local X/Y offsets to PDFs.
+
 ## E-POST configuration model
 
 E-POST MAILER 7.0 documents the Sammelkorb as a WebDAV folder and the network printer as an IPP printer. Versandoptionen such as duplex, colour, registered mail and address-window repositioning belong to the E-POST target configured by the administrator. E-POST Helper maps one local profile to one such server-side target.
