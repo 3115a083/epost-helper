@@ -284,6 +284,8 @@ public class OutboxActivity extends AppCompatActivity {
             PdfRenderer.Page page=renderer.openPage(0)){
             int height=Math.max(1,Math.round(width*(page.getHeight()/(float)page.getWidth())));
             Bitmap bitmap=Bitmap.createBitmap(width,height,Bitmap.Config.ARGB_8888);
+            android.graphics.Canvas paper=new android.graphics.Canvas(bitmap);
+            paper.drawColor(android.graphics.Color.WHITE);
             page.render(bitmap,null,null,PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
             return bitmap;
         }
