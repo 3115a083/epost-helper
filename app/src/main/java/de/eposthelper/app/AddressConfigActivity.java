@@ -46,6 +46,7 @@ public class AddressConfigActivity extends AppCompatActivity {
     @Override protected void onCreate(Bundle b){
         SettingsStore.applySavedAppearance(this);
         super.onCreate(b);
+        SettingsStore.applyDynamicColors(this);
         String id=getIntent().getStringExtra("profileId");
         profile=id==null?null:SecureStore.find(this,id);
         parseStored();
