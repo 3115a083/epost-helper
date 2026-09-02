@@ -177,7 +177,7 @@ public class MainActivity extends AppCompatActivity {
         TextView shield=UiKit.heroTitle(this,"◇",42); shield.setGravity(Gravity.CENTER); hero.addView(shield);
         String heroTitle=connected>0?"Verbindung bereit":(active>0?"Profile noch nicht geprüft":"Noch nicht eingerichtet");
         TextView h=UiKit.heroTitle(this,heroTitle,24); h.setGravity(Gravity.CENTER); hero.addView(h);
-        String heroText=connected>0?connected+" verifiziertes E-POST-Ziel":(active>0?"Prüfe die E-POST-Verbindung in den Profilen":"Lege zuerst ein Versandprofil an");
+        String heroText=connected>0?connected+" verifiziertes Versandziel":(active>0?"Prüfe die Verbindung in den Profilen":"Lege zuerst ein Versandprofil an");
         TextView b=UiKit.heroBody(this,heroText+" · TLS geschützt");
         b.setGravity(Gravity.CENTER); b.setPadding(0,UiKit.dp(this,6),0,UiKit.dp(this,12)); hero.addView(b);
         MaterialButton security=UiKit.primary(this,"Sicherheitsdetails");
@@ -248,7 +248,11 @@ public class MainActivity extends AppCompatActivity {
 
     private String safeName(Uri uri){String n=uri.getLastPathSegment();return n==null?"PDF ausgewählt":n;}
     private String profileSummary(Profile p){
-        return (Profile.TYPE_IPP.equals(p.type)?"Netzwerkdrucker":"Sammelkorb")+"  •  "+(p.duplex?"Beidseitig":"Einseitig")+"  •  "+(p.color?"Farbe":"S/W")+"  •  "+("Nein".equals(p.registeredMail)?"Standard":p.registeredMail);
+        String route=Profile.TYPE_IPP.equals(p.type)?"IPP":
+                Profile.TYPE_WEBDAV.equals(p.type)?"WebDAV":
+                Profile.TYPE_LXP_API.equals(p.type)?"API":"SFTP";
+        String provider=Profile.PROVIDER_LETTERXPRESS.equals(p.provider)?"LetterXpress":"Deutsche Post";
+        return provider+" · "+route+"  •  "+(p.duplex?"Beidseitig":"Einseitig")+"  •  "+(p.color?"Farbe":"S/W")+"  •  "+("Nein".equals(p.registeredMail)?"Standard":p.registeredMail);
     }
 
     private void sendSelected(View anchor){
@@ -257,19 +261,24 @@ public class MainActivity extends AppCompatActivity {
         if(p==null){Snackbar.make(anchor,"Versandprofil fehlt.",Snackbar.LENGTH_LONG).show();return;}
         anchor.setEnabled(false); Snackbar.make(anchor,"Sichere Übertragung läuft…",Snackbar.LENGTH_LONG).show();
         new Thread(()->{
-            try{Sender.send(this,selectedPdf,p);runOnUiThread(()->{anchor.setEnabled(true);Snackbar.make(anchor,"An E-POST übergeben.",Snackbar.LENGTH_LONG).show();});}
+            try{ProviderSender.send(this,selectedPdf,p,JobOptions.fromProfile(p));runOnUiThread(()->{anchor.setEnabled(true);Snackbar.make(anchor,"An Versanddienst übergeben.",Snackbar.LENGTH_LONG).show();});}
             catch(Exception e){runOnUiThread(()->{anchor.setEnabled(true);DebugUtil.error(this,anchor,"Versand fehlgeschlagen",e);});}
         },"epost-send").start();
     }
 
     private void renderProfiles(){
         content.addView(section("Profile verwalten"));
-        TextView intro=UiKit.body(this,"Ein Profil repräsentiert ein administrativ eingerichtetes E-POST-Ziel. Die tatsächlichen Versandoptionen liegen auf diesem Ziel.");
+        TextView intro=UiKit.body(this,"Profile verbinden bestehende Konten bei Deutsche Post oder LetterXpress mit dem Android-Druckdienst.");
         intro.setPadding(0,0,0,UiKit.dp(this,8)); content.addView(intro);
         for(Profile p:SecureStore.load(this)){
             LinearLayout box=new LinearLayout(this); box.setOrientation(LinearLayout.VERTICAL);
             LinearLayout head=new LinearLayout(this); head.setGravity(Gravity.CENTER_VERTICAL);
-            head.addView(UiKit.heading(this,p.name,17),new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1f));
+            android.widget.ImageView providerIcon=new android.widget.ImageView(this);
+            providerIcon.setImageResource(Profile.PROVIDER_LETTERXPRESS.equals(p.provider)?R.drawable.ic_provider_lxp:R.drawable.ic_provider_post);
+            providerIcon.setContentDescription(Profile.PROVIDER_LETTERXPRESS.equals(p.provider)?"LetterXpress":"Deutsche Post");
+            head.addView(providerIcon,new LinearLayout.LayoutParams(UiKit.dp(this,38),UiKit.dp(this,38)));
+            TextView profileName=UiKit.heading(this,p.name,17);profileName.setPadding(UiKit.dp(this,10),0,0,0);
+            head.addView(profileName,new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1f));
             String status=!p.active?"Inaktiv":(p.connectionVerified?"Verbunden":"Nicht geprüft");
             head.addView(UiKit.pill(this,status,p.connectionVerified)); box.addView(head);
             TextView summary=UiKit.body(this,profileSummary(p)); summary.setPadding(0,UiKit.dp(this,7),0,UiKit.dp(this,5)); box.addView(summary);
