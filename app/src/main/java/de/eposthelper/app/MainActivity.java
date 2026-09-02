@@ -392,10 +392,6 @@ public class MainActivity extends AppCompatActivity {
         TextView security=UiKit.body(this,"TLS-geschützte Übertragung, Zertifikatsprüfung und verschlüsselte lokale Zugangsdaten.");
         security.setTextSize(12);security.setPadding(0,UiKit.dp(this,14),0,UiKit.dp(this,18));content.addView(security);
 
-        TextView vibe=UiKit.heading(this,"Vibecoded with ❤️",14);vibe.setGravity(Gravity.CENTER);content.addView(vibe);
-        TextView github=UiKit.body(this,"github.com/3115a083/epost-helper");github.setGravity(Gravity.CENTER);github.setTextColor(SettingsStore.primary(this));github.setPadding(0,UiKit.dp(this,5),0,UiKit.dp(this,18));
-        github.setOnClickListener(v->startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse("https://github.com/3115a083/epost-helper"))));content.addView(github);
-
         content.addView(section("Debug"));
         LinearLayout debugBox=new LinearLayout(this);debugBox.setOrientation(LinearLayout.VERTICAL);
         com.google.android.material.materialswitch.MaterialSwitch debug=new com.google.android.material.materialswitch.MaterialSwitch(this);
@@ -404,6 +400,20 @@ public class MainActivity extends AppCompatActivity {
         TextView dh=UiKit.body(this,"Technische Fehler bleiben sichtbar und werden automatisch in die Zwischenablage kopiert.");
         dh.setTextSize(13);debugBox.addView(dh);
         content.addView(UiKit.surfaceCard(this,debugBox));
+
+        View footerGap=new View(this);
+        content.addView(footerGap,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,32)));
+
+        TextView vibe=UiKit.heading(this,"Vibecoded with ❤️",14);
+        vibe.setGravity(Gravity.CENTER);
+        vibe.setAlpha(0.82f);
+        content.addView(vibe);
+        TextView github=UiKit.body(this,"github.com/3115a083/epost-helper");
+        github.setGravity(Gravity.CENTER);
+        github.setTextColor(SettingsStore.primary(this));
+        github.setPadding(0,UiKit.dp(this,5),0,UiKit.dp(this,28));
+        github.setOnClickListener(v->startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse("https://github.com/3115a083/epost-helper"))));
+        content.addView(github);
     }
 
 }
