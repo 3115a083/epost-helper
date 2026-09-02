@@ -5,13 +5,10 @@ import android.graphics.Bitmap;
 import android.graphics.RectF;
 import android.graphics.pdf.PdfRenderer;
 import android.os.Bundle;
-import android.os.ParcelFileDescriptor;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.HorizontalScrollView;
 import android.widget.LinearLayout;
-import android.widget.ScrollView;
 import android.widget.TextView;
 
 import androidx.appcompat.app.AppCompatActivity;
@@ -31,9 +28,11 @@ public class AddressEditActivity extends AppCompatActivity {
     public static final String EXTRA_TARGET_SENDER="targetSender";
     public static final String EXTRA_TARGET_RECIPIENT="targetRecipient";
 
+    private static final RectF EDIT_VIEWPORT=new RectF(0f,0f,0.62f,0.38f);
+
     private AddressConfigView preview;
     private Profile profile;
-    private JobOptions options=new JobOptions();
+    private final JobOptions options=new JobOptions();
 
     private RectF sourceSender=new RectF();
     private RectF sourceRecipient=new RectF();
@@ -43,11 +42,7 @@ public class AddressEditActivity extends AppCompatActivity {
     private boolean sourceMode=true;
     private MaterialSwitch snap;
     private TextView hint;
-    private HorizontalScrollView horizontal;
-    private ScrollView vertical;
     private TextView previewStatus;
-    private Bitmap bitmap;
-    private float zoom=2.2f;
 
     @Override protected void onCreate(Bundle b){
         SettingsStore.applySavedAppearance(this);
@@ -56,6 +51,7 @@ public class AddressEditActivity extends AppCompatActivity {
 
         String profileId=getIntent().getStringExtra(EXTRA_PROFILE);
         profile=SecureStore.find(this,profileId);
+
         options.registered=getIntent().getStringExtra(EXTRA_REGISTERED);
         if(options.registered==null)options.registered="Nein";
 
@@ -84,13 +80,19 @@ public class AddressEditActivity extends AppCompatActivity {
         LinearLayout bar=new LinearLayout(this);
         bar.setGravity(Gravity.CENTER_VERTICAL);
         bar.setPadding(UiKit.dp(this,8),UiKit.dp(this,8),UiKit.dp(this,16),UiKit.dp(this,8));
+
         TextView back=UiKit.heading(this,"‹",34);
         back.setGravity(Gravity.CENTER);
+        back.setContentDescription("Zurück");
         back.setOnClickListener(v->getOnBackPressedDispatcher().onBackPressed());
         bar.addView(back,new LinearLayout.LayoutParams(UiKit.dp(this,54),UiKit.dp(this,54)));
-        LinearLayout titles=new LinearLayout(this);titles.setOrientation(LinearLayout.VERTICAL);
+
+        LinearLayout titles=new LinearLayout(this);
+        titles.setOrientation(LinearLayout.VERTICAL);
         titles.addView(UiKit.heading(this,"Adresslayout bearbeiten",22));
-        TextView sub=UiKit.body(this,"Vollbildbearbeitung des Briefkopfs");sub.setTextSize(12);titles.addView(sub);
+        TextView sub=UiKit.body(this,"Vergrößerter Adressbereich der ersten Seite");
+        sub.setTextSize(12);
+        titles.addView(sub);
         bar.addView(titles,new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1f));
         page.addView(bar);
 
@@ -99,13 +101,17 @@ public class AddressEditActivity extends AppCompatActivity {
         controls.setPadding(UiKit.dp(this,16),0,UiKit.dp(this,16),UiKit.dp(this,8));
 
         MaterialButtonToggleGroup modes=new MaterialButtonToggleGroup(this);
-        modes.setSingleSelection(true);modes.setSelectionRequired(true);
+        modes.setSingleSelection(true);
+        modes.setSelectionRequired(true);
+
         MaterialButton source=UiKit.tonal(this,"1 · Originalbereiche");
         source.setId(View.generateViewId());
         source.setTextColor(UiKit.resolveText(this));
+
         MaterialButton target=UiKit.tonal(this,"2 · Zielposition");
         target.setId(View.generateViewId());
         target.setTextColor(UiKit.resolveText(this));
+
         modes.addView(source,new LinearLayout.LayoutParams(0,UiKit.dp(this,48),1f));
         modes.addView(target,new LinearLayout.LayoutParams(0,UiKit.dp(this,48),1f));
         modes.check(source.getId());
@@ -119,55 +125,48 @@ public class AddressEditActivity extends AppCompatActivity {
 
         hint=UiKit.body(this,"");
         hint.setTextSize(13);
-        hint.setPadding(0,UiKit.dp(this,7),0,UiKit.dp(this,8));
+        hint.setPadding(0,UiKit.dp(this,8),0,UiKit.dp(this,8));
         controls.addView(hint);
 
-        LinearLayout tools=new LinearLayout(this);tools.setGravity(Gravity.CENTER_VERTICAL);
-        snap=new MaterialSwitch(this);snap.setText("Einrasten");snap.setTextColor(UiKit.resolveText(this));
+        snap=new MaterialSwitch(this);
+        snap.setText("An Adresslinie einrasten");
+        snap.setTextColor(UiKit.resolveText(this));
         snap.setChecked(false);
-        snap.setOnCheckedChangeListener((b,checked)->preview.setSnapEnabled(checked));
-        tools.addView(snap,new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1f));
+        snap.setOnCheckedChangeListener((button,checked)->preview.setSnapEnabled(checked));
+        controls.addView(snap);
 
-        MaterialButton minus=UiKit.tonal(this,"−");
-        minus.setContentDescription("Vorschau verkleinern");
-        minus.setOnClickListener(v->{zoom=Math.max(1.2f,zoom-0.3f);updateZoom();});
-        tools.addView(minus,new LinearLayout.LayoutParams(UiKit.dp(this,52),UiKit.dp(this,44)));
-        MaterialButton plus=UiKit.tonal(this,"+");
-        plus.setContentDescription("Vorschau vergrößern");
-        plus.setOnClickListener(v->{zoom=Math.min(3.2f,zoom+0.3f);updateZoom();});
-        tools.addView(plus,new LinearLayout.LayoutParams(UiKit.dp(this,52),UiKit.dp(this,44)));
-        controls.addView(tools);
         page.addView(controls);
 
         previewStatus=UiKit.body(this,"PDF wird geladen…");
         previewStatus.setGravity(Gravity.CENTER);
-        previewStatus.setPadding(UiKit.dp(this,16),UiKit.dp(this,8),UiKit.dp(this,16),UiKit.dp(this,8));
+        previewStatus.setPadding(UiKit.dp(this,16),UiKit.dp(this,4),UiKit.dp(this,16),UiKit.dp(this,8));
         page.addView(previewStatus);
 
-        horizontal=new HorizontalScrollView(this);
-        horizontal.setFillViewport(false);
-        horizontal.setHorizontalScrollBarEnabled(true);
-        horizontal.setOverScrollMode(View.OVER_SCROLL_ALWAYS);
-
         preview=new AddressConfigView(this);
-        preview.setFullPage(true);
+        preview.setViewport(EDIT_VIEWPORT);
         preview.setInteractive(true);
         preview.setSnapEnabled(false);
         preview.setBackgroundColor(android.graphics.Color.WHITE);
         preview.setListener((sender,recipient)->{
-            if(sourceMode){sourceSender=new RectF(sender);sourceRecipient=new RectF(recipient);}
-            else{targetSender=new RectF(sender);targetRecipient=new RectF(recipient);}
+            if(sourceMode){
+                sourceSender=new RectF(sender);
+                sourceRecipient=new RectF(recipient);
+            }else{
+                targetSender=new RectF(sender);
+                targetRecipient=new RectF(recipient);
+            }
             updateHint();
         });
 
-        int initialWidth=Math.max(getResources().getDisplayMetrics().widthPixels-UiKit.dp(this,24),UiKit.dp(this,320));
-        horizontal.addView(preview,new HorizontalScrollView.LayoutParams(initialWidth,UiKit.dp(this,900)));
+        int availableWidth=getResources().getDisplayMetrics().widthPixels-UiKit.dp(this,24);
+        float cropRatio=(EDIT_VIEWPORT.height()*297f)/(EDIT_VIEWPORT.width()*210f);
+        int previewHeight=Math.max(UiKit.dp(this,300),Math.round(availableWidth*cropRatio));
+        LinearLayout.LayoutParams plp=new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,previewHeight);
+        plp.setMargins(UiKit.dp(this,12),0,UiKit.dp(this,12),0);
+        page.addView(preview,plp);
 
-        vertical=new ScrollView(this);
-        vertical.setFillViewport(false);
-        vertical.setVerticalScrollBarEnabled(true);
-        vertical.addView(horizontal,new ScrollView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,900)));
-        page.addView(vertical,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,0,1f));
+        LinearLayout spacer=new LinearLayout(this);
+        page.addView(spacer,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,0,1f));
 
         LinearLayout bottom=new LinearLayout(this);
         bottom.setPadding(UiKit.dp(this,16),UiKit.dp(this,8),UiKit.dp(this,16),UiKit.dp(this,16));
@@ -179,34 +178,6 @@ public class AddressEditActivity extends AppCompatActivity {
         setContentView(page);
         SystemUi.apply(this,page);
         applyMode();
-        updateZoom();
-    }
-
-    private void updateZoom(){
-        if(preview==null)return;
-        int screen=getResources().getDisplayMetrics().widthPixels;
-        int width=Math.round((screen-UiKit.dp(this,24))*zoom);
-        int resolvedWidth=Math.max(screen-UiKit.dp(this,24),width);
-        int resolvedHeight;
-        if(bitmap!=null&&bitmap.getWidth()>0){
-            resolvedHeight=Math.max(UiKit.dp(this,620),Math.round(resolvedWidth*(bitmap.getHeight()/(float)bitmap.getWidth())));
-        }else{
-            resolvedHeight=UiKit.dp(this,900);
-        }
-
-        ViewGroup.LayoutParams lp=preview.getLayoutParams();
-        if(lp==null)lp=new HorizontalScrollView.LayoutParams(resolvedWidth,resolvedHeight);
-        lp.width=resolvedWidth;
-        lp.height=resolvedHeight;
-        preview.setLayoutParams(lp);
-
-        if(horizontal!=null){
-            ViewGroup.LayoutParams hp=horizontal.getLayoutParams();
-            if(hp!=null){
-                hp.height=resolvedHeight;
-                horizontal.setLayoutParams(hp);
-            }
-        }
     }
 
     private void saveCurrentBoxes(){
@@ -222,11 +193,12 @@ public class AddressEditActivity extends AppCompatActivity {
 
     private void applyMode(){
         if(preview==null)return;
+
         preview.setInteractive(true);
         if(sourceMode){
             preview.setBoxes(sourceSender,sourceRecipient);
             preview.setReservedArea(null,null);
-            snap.setChecked(false);
+            if(snap.isChecked())snap.setChecked(false);
         }else{
             preview.setBoxes(targetSender,targetRecipient);
             RectF reserved=profile==null?new RectF():AddressLayoutRules.reserved(profile,options);
@@ -237,11 +209,11 @@ public class AddressEditActivity extends AppCompatActivity {
 
     private void updateHint(){
         if(sourceMode){
-            hint.setText("Ziehe Absender und Empfänger genau über die Bereiche, die im aktuellen PDF bereits vorhanden sind. Ohne Einrasten kannst du Größe und Position frei anpassen.");
+            hint.setText("Ziehe die beiden Rahmen auf Absender und Empfänger im vorhandenen Brief. Ohne Einrasten kannst du Position und Größe frei ändern.");
         }else if(preview!=null&&preview.hasCollision()){
-            hint.setText("Die Zielposition kollidiert mit einer reservierten Fläche. Verschiebe die Felder, bis die rote Markierung verschwindet.");
+            hint.setText("Die Zielposition kollidiert mit einer reservierten Fläche. Verschiebe die Rahmen, bis die rote Markierung verschwindet.");
         }else{
-            hint.setText("Lege fest, wo Absender und Empfänger im versendeten Brief erscheinen sollen. Einrasten hält beide Bereiche auf derselben typischen Adresslinie.");
+            hint.setText("Lege die Zielposition für den versendeten Brief fest. Der Ausschnitt zeigt bewusst nur den relevanten Adressbereich.");
         }
     }
 
@@ -251,6 +223,7 @@ public class AddressEditActivity extends AppCompatActivity {
             previewStatus.setText("PDF-Datei fehlt.");
             return;
         }
+
         File file=new File(path);
         if(!file.exists()||!file.canRead()){
             previewStatus.setText("PDF-Datei ist nicht mehr verfügbar.");
@@ -259,15 +232,11 @@ public class AddressEditActivity extends AppCompatActivity {
 
         new Thread(()->{
             try{
-                Bitmap result=PdfPreviewRenderer.renderFirstPage(file,1400,PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
+                Bitmap bitmap=PdfPreviewRenderer.renderFirstPage(file,1400,PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
                 runOnUiThread(()->{
-                    bitmap=result;
-                    preview.setBitmap(result);
-                    previewStatus.setText("Seite 1 · Ziehen zum Bearbeiten");
-                    updateZoom();
+                    preview.setBitmap(bitmap);
+                    previewStatus.setText("Adressbereich · Seite 1");
                     applyMode();
-                    preview.requestLayout();
-                    preview.invalidate();
                 });
             }catch(Exception e){
                 runOnUiThread(()->{
@@ -275,23 +244,24 @@ public class AddressEditActivity extends AppCompatActivity {
                     DebugUtil.error(this,preview,"PDF-Vorschau",e);
                 });
             }
-        },"address-full-preview").start();
+        },"address-crop-preview").start();
     }
 
     private void save(){
         saveCurrentBoxes();
+
         Intent result=new Intent();
         result.putExtra(EXTRA_SOURCE_SENDER,AddressCorrectionProcessor.encode(sourceSender));
         result.putExtra(EXTRA_SOURCE_RECIPIENT,AddressCorrectionProcessor.encode(sourceRecipient));
         result.putExtra(EXTRA_TARGET_SENDER,AddressCorrectionProcessor.encode(targetSender));
         result.putExtra(EXTRA_TARGET_RECIPIENT,AddressCorrectionProcessor.encode(targetRecipient));
+
         setResult(RESULT_OK,result);
         finish();
     }
 
     @Override protected void onDestroy(){
         if(preview!=null)preview.clearBitmap();
-        else if(bitmap!=null&&!bitmap.isRecycled())bitmap.recycle();
         super.onDestroy();
     }
 }
