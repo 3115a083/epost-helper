@@ -175,12 +175,12 @@ public class OutboxActivity extends AppCompatActivity {
         List<Profile> profiles=SecureStore.load(this);
         for(Profile p:profiles){
             if(!p.active)continue;
-            LinearLayout row=new LinearLayout(this);row.setOrientation(LinearLayout.VERTICAL);
             RadioButton rb=new RadioButton(this);rb.setId(View.generateViewId());rb.setTag(p.id);
             rb.setText((Profile.PROVIDER_LETTERXPRESS.equals(p.provider)?"LetterXpress":"Deutsche Post")+" · "+p.name);
-            if(selectedProfileId==null)selectedProfileId=p.id;rb.setChecked(p.id.equals(selectedProfileId));row.addView(rb);
-            TextView price=UiKit.body(this,"Kosten werden ermittelt…");price.setTextSize(13);row.addView(price);
-            group.addView(row);
+            if(selectedProfileId==null)selectedProfileId=p.id;rb.setChecked(p.id.equals(selectedProfileId));
+            group.addView(rb);
+            TextView price=UiKit.body(this,"Kosten werden ermittelt…");price.setTextSize(13);
+            price.setPadding(UiKit.dp(this,42),0,0,UiKit.dp(this,8));group.addView(price);
             loadPrice(p,pages,price);
         }
         group.setOnCheckedChangeListener((g,id)->{
