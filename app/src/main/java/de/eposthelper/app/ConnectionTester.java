@@ -75,7 +75,7 @@ public final class ConnectionTester {
         String challenge=r.header("WWW-Authenticate","");
         String hint=kind+" meldet HTTP 401. ";
         if(!challenge.isBlank()) hint+="Server-Challenge: "+challenge+". ";
-        hint+="Prüfe Benutzername und Passwort. Beim E-POST Netzwerkdrucker nennt das Handbuch z. B. Benutzername@Firmen-ID.";
+        hint+="Prüfe die vom aktuellen Geschäftskundenportal bereitgestellte Ziel-URL und die dafür vorgesehenen Zugangsdaten. Das alte Benutzername@Firmen-ID-Schema wird nicht vorausgesetzt.";
         return hint;
     }
 
