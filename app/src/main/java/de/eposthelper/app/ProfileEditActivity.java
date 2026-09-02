@@ -22,7 +22,6 @@ import com.google.android.material.snackbar.Snackbar;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.Executors;
 
 public class ProfileEditActivity extends AppCompatActivity {
     private Profile profile;
@@ -95,19 +94,6 @@ public class ProfileEditActivity extends AppCompatActivity {
         root.setPadding(UiKit.dp(this,18),0,UiKit.dp(this,18),UiKit.dp(this,30));
         scroll.addView(root);
 
-        int[] grad=SettingsStore.gradient(this);
-        LinearLayout hero=new LinearLayout(this); hero.setOrientation(LinearLayout.VERTICAL);
-        LinearLayout heroHead=new LinearLayout(this); heroHead.setGravity(Gravity.CENTER_VERTICAL);
-        TextView icon=UiKit.heroTitle(this,"✉",32); icon.setGravity(Gravity.CENTER);
-        heroHead.addView(icon,new LinearLayout.LayoutParams(UiKit.dp(this,54),UiKit.dp(this,54)));
-        LinearLayout heroText=new LinearLayout(this); heroText.setOrientation(LinearLayout.VERTICAL);
-        heroText.addView(UiKit.heroTitle(this,profile.name==null||profile.name.isBlank()?"Versandprofil":profile.name,20));
-        heroText.addView(UiKit.heroBody(this,Profile.TYPE_IPP.equals(profile.type)?"Netzwerkdrucker / IPP":"Sammelkorb / WebDAV"));
-        heroHead.addView(heroText,new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1f));
-        heroHead.addView(UiKit.pill(this,profile.active?"Aktiv":"Inaktiv",profile.active));
-        hero.addView(heroHead);
-        root.addView(UiKit.hero(this,hero,grad[0],grad[1]));
-
         LinearLayout connection=new LinearLayout(this); connection.setOrientation(LinearLayout.VERTICAL);
         name=field("Profilname, z. B. Farbe beidseitig",profile.name,false); addField(connection,name);
         connection.addView(label("Einlieferungsweg"));
@@ -117,7 +103,7 @@ public class ProfileEditActivity extends AppCompatActivity {
         type.setSelection(Profile.TYPE_IPP.equals(profile.type)?1:0);
         connection.addView(type,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,52)));
         url=field("Vom Administrator bereitgestellte URL",profile.url,false); addField(connection,url);
-        root.addView(section("Verbindung","E-POST MAILER 7.0 verwendet für Sammelkörbe WebDAV und für Netzwerkdrucker IPP.",connection));
+        root.addView(section("Verbindung","Die Ziel-URL wird im aktuellen E-POST-Portal bereitgestellt. Die App folgt der Authentifizierungs-Challenge des Servers.",connection));
 
         LinearLayout credentials=new LinearLayout(this); credentials.setOrientation(LinearLayout.VERTICAL);
         user=field("Benutzername",profile.username,false); addField(credentials,user);
@@ -138,7 +124,7 @@ public class ProfileEditActivity extends AppCompatActivity {
         int idx=0; for(int i=0;i<regs.length;i++) if(regs[i].equals(profile.registeredMail))idx=i;
         registered.setSelection(idx);
         options.addView(registered,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,52)));
-        TextView optionHelp=UiKit.body(this,"Diese Merkmale dienen der Auswahl in Android. Die tatsächlichen Versandoptionen werden im E-POST-Ziel konfiguriert. Bei Sammelkörben liest die Verbindungsprüfung zusätzlich Info.txt.");
+        TextView optionHelp=UiKit.body(this,"Diese Merkmale dienen nur der Auswahl in Android. Die tatsächlichen Versandoptionen werden im E-POST-Ziel konfiguriert.");
         optionHelp.setTextSize(12); optionHelp.setPadding(0,UiKit.dp(this,8),0,0); options.addView(optionHelp);
         root.addView(section("Versandprofil","Farbe, Duplex und Einschreiben werden vom jeweiligen E-POST-Ziel bestimmt.",options));
 
@@ -198,7 +184,7 @@ public class ProfileEditActivity extends AppCompatActivity {
     private void testConnection(MaterialButton anchor){
         if(!validate())return;
         anchor.setEnabled(false); anchor.setText("Prüfung läuft…");
-        Executors.newSingleThreadExecutor().execute(()->{
+        new Thread(()->{
             try{
                 String result=ConnectionTester.test(profile);
                 profile.connectionVerified=true;
@@ -217,10 +203,10 @@ public class ProfileEditActivity extends AppCompatActivity {
                     profile.connectionVerifiedAt=System.currentTimeMillis();
                     profile.lastConnectionMessage=e.getMessage()==null?"Unbekannter Fehler":e.getMessage();
                     try{persistProfile();}catch(Exception ignored){}
-                    Snackbar.make(anchor,"Prüfung fehlgeschlagen: "+profile.lastConnectionMessage,Snackbar.LENGTH_LONG).show();
+                    DebugUtil.error(this,anchor,"Prüfung fehlgeschlagen: "+profile.lastConnectionMessage);
                 });
             }
-        });
+        },"epost-connection-test").start();
     }
 
     private void persistProfile() throws Exception{
@@ -238,7 +224,7 @@ public class ProfileEditActivity extends AppCompatActivity {
         try{
             persistProfile(); finish();
         }catch(Exception e){
-            Snackbar.make(anchor,e.getMessage()==null?"Profil konnte nicht gespeichert werden.":e.getMessage(),Snackbar.LENGTH_LONG).show();
+            DebugUtil.error(this,anchor,e.getMessage()==null?"Profil konnte nicht gespeichert werden.":e.getMessage());
         }
     }
 
@@ -248,7 +234,7 @@ public class ProfileEditActivity extends AppCompatActivity {
             for(int i=list.size()-1;i>=0;i--) if(list.get(i).id.equals(profile.id)) list.remove(i);
             SecureStore.save(this,list); finish();
         }catch(Exception e){
-            Snackbar.make(anchor,"Profil konnte nicht gelöscht werden.",Snackbar.LENGTH_LONG).show();
+            DebugUtil.error(this,anchor,"Profil konnte nicht gelöscht werden.");
         }
     }
 }
