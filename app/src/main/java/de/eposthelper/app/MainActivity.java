@@ -189,7 +189,7 @@ public class MainActivity extends AppCompatActivity {
             TextView title=section("Letzte LetterXpress-Sendungen");
             titleRow.addView(title,new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1f));
             MaterialButton refresh=UiKit.tonal(this,"Aktualisieren");
-            refresh.setMinWidth(0);refresh.setInsetLeft(0);refresh.setInsetRight(0);
+            refresh.setMinWidth(0);refresh.setPadding(UiKit.dp(this,12),0,UiKit.dp(this,12),0);
             refresh.setOnClickListener(v->{recentCache.clear();loadRecent(api,true);});
             titleRow.addView(refresh,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,UiKit.dp(this,44)));
             content.addView(titleRow);
