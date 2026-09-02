@@ -233,6 +233,8 @@ public class AddressEditActivity extends AppCompatActivity {
                 int width=1400;
                 int height=Math.max(1,Math.round(width*(page.getHeight()/(float)page.getWidth())));
                 result=Bitmap.createBitmap(width,height,Bitmap.Config.ARGB_8888);
+                android.graphics.Canvas paper=new android.graphics.Canvas(result);
+                paper.drawColor(android.graphics.Color.WHITE);
                 page.render(result,null,null,PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
                 Bitmap finalResult=result;
                 runOnUiThread(()->{
