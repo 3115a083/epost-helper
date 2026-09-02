@@ -28,7 +28,6 @@ import com.google.android.material.card.MaterialCardView;
 import com.google.android.material.snackbar.Snackbar;
 
 import java.util.List;
-import java.util.concurrent.Executors;
 
 public class MainActivity extends AppCompatActivity {
     private LinearLayout content;
@@ -71,11 +70,6 @@ public class MainActivity extends AppCompatActivity {
         brand.addView(UiKit.heading(this,"E-POST Helper",24));
         TextView sub=UiKit.body(this,"Sicherer Hybridbriefversand"); sub.setTextSize(13); brand.addView(sub);
         top.addView(brand,new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1f));
-        MaterialButton settingsButton=UiKit.tonal(this,"");
-        settingsButton.setIconResource(de.eposthelper.app.R.drawable.ic_settings);
-        settingsButton.setContentDescription("Einstellungen öffnen");
-        settingsButton.setMinWidth(UiKit.dp(this,50)); settingsButton.setOnClickListener(v->{currentTab=3;render();});
-        top.addView(settingsButton,new LinearLayout.LayoutParams(UiKit.dp(this,54),UiKit.dp(this,48)));
         page.addView(top);
 
         ScrollView scroll=new ScrollView(this); scroll.setFillViewport(true);
@@ -87,7 +81,7 @@ public class MainActivity extends AppCompatActivity {
         nav=new LinearLayout(this); nav.setGravity(Gravity.CENTER);
         nav.setPadding(UiKit.dp(this,8),UiKit.dp(this,6),UiKit.dp(this,8),UiKit.dp(this,8));
         String[] labels={"Start","Drucken","Profile","Einstellungen"};
-        String[] icons={"⌂","▣","▤","⚙"};
+        String[] icons={"⌂","✉","☷","⚙"};
         for(int i=0;i<labels.length;i++){
             final int tab=i;
             LinearLayout item=new LinearLayout(this); item.setOrientation(LinearLayout.VERTICAL); item.setGravity(Gravity.CENTER);
@@ -224,10 +218,10 @@ public class MainActivity extends AppCompatActivity {
         Profile p=SecureStore.find(this,selectedProfileId);
         if(p==null){Snackbar.make(anchor,"Versandprofil fehlt.",Snackbar.LENGTH_LONG).show();return;}
         anchor.setEnabled(false); Snackbar.make(anchor,"Sichere Übertragung läuft…",Snackbar.LENGTH_LONG).show();
-        Executors.newSingleThreadExecutor().execute(()->{
+        new Thread(()->{
             try{Sender.send(this,selectedPdf,p);runOnUiThread(()->{anchor.setEnabled(true);Snackbar.make(anchor,"An E-POST übergeben.",Snackbar.LENGTH_LONG).show();});}
-            catch(Exception e){runOnUiThread(()->{anchor.setEnabled(true);Snackbar.make(anchor,"Versand fehlgeschlagen: "+e.getMessage(),Snackbar.LENGTH_LONG).show();});}
-        });
+            catch(Exception e){runOnUiThread(()->{anchor.setEnabled(true);DebugUtil.error(this,anchor,"Versand fehlgeschlagen",e);});}
+        },"epost-send").start();
     }
 
     private void renderProfiles(){
@@ -277,7 +271,6 @@ public class MainActivity extends AppCompatActivity {
 
         LinearLayout paletteBox=new LinearLayout(this); paletteBox.setOrientation(LinearLayout.VERTICAL);
         paletteBox.addView(UiKit.heading(this,"Farbpalette",17));
-        TextView ph=UiKit.body(this,"Akzentfarben für Hero, Buttons und Navigation"); ph.setPadding(0,UiKit.dp(this,4),0,UiKit.dp(this,8)); paletteBox.addView(ph);
         com.google.android.material.chip.ChipGroup chips=new com.google.android.material.chip.ChipGroup(this);
         chips.setSingleSelection(true); chips.setSelectionRequired(true);
         String[][] pd={{"Ocean","ocean"},{"Forest","forest"},{"Sunset","sunset"},{"Aurora","aurora"},{"Lavender","lavender"},{"Graphite","graphite"}};
@@ -296,15 +289,22 @@ public class MainActivity extends AppCompatActivity {
         paletteBox.addView(chips);
         content.addView(UiKit.surfaceCard(this,paletteBox));
 
-        content.addView(section("E-POST"));
-        content.addView(actionCard("▤","Versandprofile","Ziele bearbeiten, Zugang prüfen und Authentifizierung testen",()->{currentTab=2;render();}));
-        content.addView(actionCard("▣","Versandfeld-Assistent","Adresspositionierung mit Sichtfenster und Sperrflächen vorbereiten",()->startActivity(new Intent(this,AddressConfigActivity.class))));
-        content.addView(actionCard("▣","Android-Druckdienst","E-POST Helper als Systemdrucker aktivieren",()->startActivity(new Intent(Settings.ACTION_PRINT_SETTINGS))));
+        content.addView(section("Diagnose"));
+        LinearLayout debugBox=new LinearLayout(this); debugBox.setOrientation(LinearLayout.VERTICAL);
+        com.google.android.material.materialswitch.MaterialSwitch debug=new com.google.android.material.materialswitch.MaterialSwitch(this);
+        debug.setText("Debugmodus"); debug.setChecked(SettingsStore.debugMode(this));
+        debug.setOnCheckedChangeListener((button,checked)->SettingsStore.setDebugMode(MainActivity.this,checked));
+        debugBox.addView(debug);
+        TextView dh=UiKit.body(this,"Im Debugmodus bleiben Fehler sichtbar und werden automatisch in die Zwischenablage kopiert. Ohne Debugmodus verschwinden Fehlermeldungen kurz danach.");
+        dh.setTextSize(13); debugBox.addView(dh);
+        content.addView(UiKit.surfaceCard(this,debugBox));
 
-        content.addView(section("Sicherheit"));
-        content.addView(infoCard("Transport","Nur HTTPS/IPPS. TLS 1.2/1.3, System-Truststore, Hostname-Prüfung und optionales SPKI-Pinning."));
-        content.addView(infoCard("Authentifizierung","Bei HTTP 401 verarbeitet die App Basic- und Digest-Challenges. Für Netzwerkdrucker nennt E-POST z. B. Benutzername@Firmen-ID."));
-        content.addView(infoCard("Lokale Daten","Zugangsdaten und Profile werden AES-256-GCM-verschlüsselt. Der Schlüssel bleibt im Android Keystore."));
+        content.addView(section("Werkzeuge"));
+        content.addView(actionCard("⌖","Versandfeld-Assistent","PDF laden und den Adressbereich des eigenen Brieflayouts markieren",()->startActivity(new Intent(this,AddressConfigActivity.class))));
+        content.addView(actionCard("⚙","Android-Druckdienst","E-POST Helper als Systemdrucker aktivieren",()->startActivity(new Intent(Settings.ACTION_PRINT_SETTINGS))));
+
+        TextView security=UiKit.body(this,"Sicherheit: nur HTTPS/IPPS, TLS 1.2/1.3, Zertifikats- und Hostnameprüfung. Zugangsdaten werden verschlüsselt im Android Keystore gespeichert.");
+        security.setTextSize(12); security.setPadding(0,UiKit.dp(this,14),0,0); content.addView(security);
     }
 
     private MaterialCardView infoCard(String title,String text){
