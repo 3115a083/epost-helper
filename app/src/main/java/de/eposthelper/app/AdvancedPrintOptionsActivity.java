@@ -96,19 +96,23 @@ public class AdvancedPrintOptionsActivity extends AppCompatActivity {
     }
 
     private void refreshPrice(){
-        if(!Profile.PROVIDER_LETTERXPRESS.equals(profile.provider)||!Profile.TYPE_LXP_API.equals(profile.type)){
-            price.setText("");return;
-        }
+        if(!Profile.PROVIDER_LETTERXPRESS.equals(profile.provider)){price.setText("");return;}
         int pages=documentInfo==null?0:documentInfo.getPageCount();
         if(pages<=0){price.setText("Preis nach Seitenanalyse verfügbar");return;}
-        price.setText("Preis wird berechnet…");
         JobOptions o=options();
+        if(Profile.TYPE_LXP_SFTP.equals(profile.type)){
+            double estimate=LetterXpressPriceEstimator.gross(o,pages);
+            price.setText(estimate>=0?String.format(java.util.Locale.GERMANY,"Ca. %.2f € brutto · öffentlicher Listenpreis",estimate):"Preis nicht verfügbar");
+            return;
+        }
+        price.setText("Preis wird berechnet…");
         new Thread(()->{
             try{
                 double p=LetterXpressApiClient.price(profile,o,pages);
                 runOnUiThread(()->price.setText(p>=0?String.format(java.util.Locale.GERMANY,"Voraussichtlich %.2f €",p):"Preis nicht verfügbar"));
             }catch(Exception e){
-                runOnUiThread(()->price.setText("Preis nicht verfügbar"));
+                double estimate=LetterXpressPriceEstimator.gross(o,pages);
+                runOnUiThread(()->price.setText(estimate>=0?String.format(java.util.Locale.GERMANY,"Ca. %.2f € brutto · Listenpreis",estimate):"Preis nicht verfügbar"));
             }
         },"lxp-price").start();
     }
