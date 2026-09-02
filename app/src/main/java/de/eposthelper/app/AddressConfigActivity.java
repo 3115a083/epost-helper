@@ -135,7 +135,7 @@ public class AddressConfigActivity extends AppCompatActivity {
         help.setTextSize(13);
         help.setPadding(0,UiKit.dp(this,4),0,UiKit.dp(this,8));
         previewBox.addView(help);
-        previewBox.addView(preview,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,370)));
+        previewBox.addView(preview,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,235)));
         root.addView(UiKit.surfaceCard(this,previewBox));
 
         values=UiKit.mono(this,"");
