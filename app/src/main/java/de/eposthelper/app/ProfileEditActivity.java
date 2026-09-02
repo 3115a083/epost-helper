@@ -185,7 +185,7 @@ public class ProfileEditActivity extends AppCompatActivity {
         profile.url=text(url); profile.username=text(user); profile.password=text(pass); profile.certificatePin=text(pin);
         profile.active=active.isChecked(); profile.duplex=duplex.isChecked(); profile.color=color.isChecked();
         profile.registeredMail=String.valueOf(registered.getSelectedItem());
-        profile.recipientWindow=""; profile.senderWindow="";
+        
     }
 
     private boolean validate(){
