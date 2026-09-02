@@ -18,13 +18,16 @@ public final class AddressConfigView extends View {
     private final RectF imageRect=new RectF();
     private final RectF viewport=new RectF(0f,0f,1f,0.34f);
 
-    private final RectF sender=new RectF(0.105f,0.055f,0.535f,0.105f);
-    private final RectF recipient=new RectF(0.105f,0.115f,0.535f,0.235f);
+    private final RectF sender=AddressLayoutRules.normalSender();
+    private final RectF recipient=AddressLayoutRules.normalRecipient();
     private final RectF reserved=new RectF();
+    private final RectF recipientSafety=new RectF();
 
     private RectF active;
     private boolean showReserved=false;
+    private boolean showRecipientSafety=false;
     private String reservedLabel="Reservierter Bereich";
+    private String recipientSafetyLabel="Adress-Sicherheitsbereich";
     private boolean resizing=false;
     private boolean snapEnabled=true;
     private boolean interactive=true;
@@ -103,6 +106,18 @@ public final class AddressConfigView extends View {
         invalidate();
     }
 
+    public void setRecipientSafetyArea(RectF area,String label){
+        if(area==null||area.isEmpty()){
+            recipientSafety.setEmpty();
+            showRecipientSafety=false;
+        }else{
+            recipientSafety.set(area);
+            showRecipientSafety=true;
+        }
+        recipientSafetyLabel=label==null?"Adress-Sicherheitsbereich":label;
+        invalidate();
+    }
+
     public boolean hasCollision(){
         return showReserved&&(RectF.intersects(sender,reserved)||RectF.intersects(recipient,reserved));
     }
@@ -166,6 +181,21 @@ public final class AddressConfigView extends View {
             paint.setColor(0x335B5BD6);
             paint.setStrokeWidth(UiKit.dp(getContext(),1));
             canvas.drawLine(sx,imageRect.top,sx,imageRect.bottom,paint);
+        }
+
+        if(showRecipientSafety&&RectF.intersects(viewport,recipientSafety)){
+            RectF sp=toPixels(recipientSafety);
+            int sc=0xFF6A5ACD;
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor((sc&0x00FFFFFF)|0x26000000);
+            canvas.drawRect(sp,paint);
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(UiKit.dp(getContext(),2));
+            paint.setColor(sc);
+            canvas.drawRect(sp,paint);
+            paint.setStyle(Paint.Style.FILL);
+            paint.setTextSize(UiKit.dp(getContext(),10));
+            canvas.drawText(recipientSafetyLabel,sp.left+UiKit.dp(getContext(),5),sp.top+UiKit.dp(getContext(),13),paint);
         }
 
         if(showReserved&&RectF.intersects(viewport,reserved)){
