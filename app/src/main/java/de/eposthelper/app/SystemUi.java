@@ -5,6 +5,7 @@ import android.content.res.Configuration;
 import android.view.View;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
+import androidx.activity.EdgeToEdge;
 import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
@@ -13,7 +14,7 @@ public final class SystemUi {
     private SystemUi(){}
 
     public static void apply(Activity activity, View root){
-        WindowCompat.enableEdgeToEdge(activity.getWindow());
+        EdgeToEdge.enable(activity);
         ViewCompat.setOnApplyWindowInsetsListener(root,(v,insets)->{
             Insets bars=insets.getInsets(WindowInsetsCompat.Type.systemBars());
             v.setPadding(bars.left,bars.top,bars.right,bars.bottom);
