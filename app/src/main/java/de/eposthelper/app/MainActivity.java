@@ -1,6 +1,7 @@
 package de.eposthelper.app;
 
 import android.content.Intent;
+import android.content.res.ColorStateList;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
@@ -10,12 +11,9 @@ import android.provider.Settings;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.ArrayAdapter;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
-import android.widget.RadioButton;
-import android.widget.RadioGroup;
 import android.widget.ScrollView;
-import android.widget.Spinner;
 import android.widget.TextView;
 
 import androidx.activity.OnBackPressedCallback;
@@ -29,46 +27,49 @@ import com.google.android.material.card.MaterialCardView;
 import com.google.android.material.snackbar.Snackbar;
 
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
-    private LinearLayout content;
-    private LinearLayout nav;
-    private Uri selectedPdf;
-    private String selectedProfileId;
+    private LinearLayout content,nav,recentContainer;
     private int currentTab=0;
     private final ArrayDeque<Integer> tabHistory=new ArrayDeque<>();
     private long lastBackAt=0L;
+    private boolean historyLoading=false;
+    private List<RecentLetter> recentCache=new ArrayList<>();
 
-    private final ActivityResultLauncher<String[]> picker=registerForActivityResult(
-            new ActivityResultContracts.OpenDocument(),uri->{
-                if(uri!=null){
-                    try{getContentResolver().takePersistableUriPermission(uri,Intent.FLAG_GRANT_READ_URI_PERMISSION);}
-                    catch(SecurityException ignored){}
-                    selectedPdf=uri; navigateTo(1);
-                }
+    private final ActivityResultLauncher<Uri> folderPicker=registerForActivityResult(
+            new ActivityResultContracts.OpenDocumentTree(),uri->{
+                if(uri==null)return;
+                try{
+                    getContentResolver().takePersistableUriPermission(uri,
+                            Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+                }catch(Exception ignored){}
+                SettingsStore.setOutboxFolder(this,uri.toString());
+                int imported=OutboxStore.importFolder(this);
+                if(currentTab==3)render();
+                Snackbar.make(content,imported>0?imported+" PDF(s) importiert.":"Druckausgangsordner gespeichert.",Snackbar.LENGTH_SHORT).show();
             });
 
     @Override protected void onCreate(Bundle b){
         SettingsStore.applySavedAppearance(this);
         super.onCreate(b);
-        if(Intent.ACTION_VIEW.equals(getIntent().getAction())&&getIntent().getData()!=null){
-            selectedPdf=getIntent().getData(); currentTab=1;
-        }
-        if(b!=null) currentTab=b.getInt("currentTab",currentTab);
+        if(b!=null)currentTab=b.getInt("currentTab",0);
         buildShell();
         setupBackNavigation();
+        OutboxStore.importFolder(this);
         render();
-    }
-
-    @Override protected void onSaveInstanceState(Bundle outState){
-        outState.putInt("currentTab",currentTab);
-        super.onSaveInstanceState(outState);
     }
 
     @Override protected void onResume(){
         super.onResume();
-        if(content!=null) render();
+        OutboxStore.importFolder(this);
+        if(content!=null)render();
+    }
+
+    @Override protected void onSaveInstanceState(Bundle out){
+        out.putInt("currentTab",currentTab);
+        super.onSaveInstanceState(out);
     }
 
     private void navigateTo(int tab){
@@ -82,19 +83,12 @@ public class MainActivity extends AppCompatActivity {
         getOnBackPressedDispatcher().addCallback(this,new OnBackPressedCallback(true){
             @Override public void handleOnBackPressed(){
                 if(!tabHistory.isEmpty()){
-                    currentTab=tabHistory.pop();
-                    render();
-                    return;
+                    currentTab=tabHistory.pop();render();return;
                 }
-                if(currentTab!=0){
-                    currentTab=0;
-                    render();
-                    return;
-                }
+                if(currentTab!=0){currentTab=0;render();return;}
                 long now=System.currentTimeMillis();
-                if(now-lastBackAt<2000){
-                    finish();
-                }else{
+                if(now-lastBackAt<2000)finish();
+                else{
                     lastBackAt=now;
                     Snackbar.make(content,"Zum Beenden erneut Zurück drücken",Snackbar.LENGTH_SHORT).show();
                 }
@@ -103,60 +97,53 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void buildShell(){
-        LinearLayout page=new LinearLayout(this);
-        page.setOrientation(LinearLayout.VERTICAL);
-        page.setBackgroundColor(UiKit.resolveSurface(this));
+        LinearLayout page=new LinearLayout(this);page.setOrientation(LinearLayout.VERTICAL);page.setBackgroundColor(UiKit.resolveSurface(this));
 
-        LinearLayout top=new LinearLayout(this); top.setGravity(Gravity.CENTER_VERTICAL);
-        top.setPadding(UiKit.dp(this,20),UiKit.dp(this,12),UiKit.dp(this,10),UiKit.dp(this,8));
-        LinearLayout brand=new LinearLayout(this); brand.setOrientation(LinearLayout.VERTICAL);
-        brand.addView(UiKit.heading(this,"E-POST Helper",24));
-        TextView sub=UiKit.body(this,"Sicherer Hybridbriefversand"); sub.setTextSize(13); brand.addView(sub);
+        LinearLayout top=new LinearLayout(this);top.setGravity(Gravity.CENTER_VERTICAL);
+        top.setPadding(UiKit.dp(this,20),UiKit.dp(this,12),UiKit.dp(this,16),UiKit.dp(this,8));
+        LinearLayout brand=new LinearLayout(this);brand.setOrientation(LinearLayout.VERTICAL);
+        brand.addView(UiKit.heading(this,"Briefversand",24));
+        TextView sub=UiKit.body(this,"Deutsche Post & LetterXpress");sub.setTextSize(13);brand.addView(sub);
         top.addView(brand,new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1f));
         page.addView(top);
 
-        ScrollView scroll=new ScrollView(this); scroll.setFillViewport(true);
-        content=new LinearLayout(this); content.setOrientation(LinearLayout.VERTICAL);
+        ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);
+        content=new LinearLayout(this);content.setOrientation(LinearLayout.VERTICAL);
         content.setPadding(UiKit.dp(this,18),UiKit.dp(this,4),UiKit.dp(this,18),UiKit.dp(this,30));
-        scroll.addView(content);
-        page.addView(scroll,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,0,1f));
+        scroll.addView(content);page.addView(scroll,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,0,1f));
 
-        nav=new LinearLayout(this); nav.setGravity(Gravity.CENTER);
-        nav.setPadding(UiKit.dp(this,8),UiKit.dp(this,6),UiKit.dp(this,8),UiKit.dp(this,8));
+        nav=new LinearLayout(this);nav.setGravity(Gravity.CENTER);nav.setPadding(UiKit.dp(this,8),UiKit.dp(this,5),UiKit.dp(this,8),UiKit.dp(this,8));
         String[] labels={"Start","Drucken","Profile","Einstellungen"};
-        String[] icons={"⌂","✉","☷","⚙"};
+        int[] icons={R.drawable.ic_nav_home,R.drawable.ic_nav_print,R.drawable.ic_nav_profiles,R.drawable.ic_nav_settings};
         for(int i=0;i<labels.length;i++){
             final int tab=i;
-            LinearLayout item=new LinearLayout(this); item.setOrientation(LinearLayout.VERTICAL); item.setGravity(Gravity.CENTER);
-            item.setPadding(UiKit.dp(this,3),UiKit.dp(this,3),UiKit.dp(this,3),UiKit.dp(this,3));
-            TextView icon=new TextView(this); icon.setText(icons[i]); icon.setTextSize(20); icon.setGravity(Gravity.CENTER); icon.setContentDescription(labels[i]);
-            TextView label=new TextView(this); label.setText(labels[i]); label.setTextSize(11); label.setGravity(Gravity.CENTER);
-            item.addView(icon,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,27)));
-            item.addView(label,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,19)));
-            item.setTag(new View[]{icon,label}); item.setOnClickListener(v->navigateTo(tab));
-            nav.addView(item,new LinearLayout.LayoutParams(0,UiKit.dp(this,56),1f));
+            LinearLayout item=new LinearLayout(this);item.setOrientation(LinearLayout.VERTICAL);item.setGravity(Gravity.CENTER);
+            ImageView icon=new ImageView(this);icon.setImageResource(icons[i]);icon.setContentDescription(labels[i]);
+            TextView label=new TextView(this);label.setText(labels[i]);label.setTextSize(11);label.setGravity(Gravity.CENTER);
+            item.addView(icon,new LinearLayout.LayoutParams(UiKit.dp(this,25),UiKit.dp(this,25)));
+            item.addView(label,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,20)));
+            item.setTag(new View[]{icon,label});item.setOnClickListener(v->navigateTo(tab));
+            nav.addView(item,new LinearLayout.LayoutParams(0,UiKit.dp(this,58),1f));
         }
         page.addView(nav);
-        setContentView(page);
-        SystemUi.apply(this,page);
+        setContentView(page);SystemUi.apply(this,page);
     }
 
     private void styleNav(){
         int primary=SettingsStore.primary(this);
         for(int i=0;i<nav.getChildCount();i++){
-            LinearLayout item=(LinearLayout)nav.getChildAt(i); View[] views=(View[])item.getTag();
-            boolean selected=i==currentTab; int color=selected?primary:UiKit.resolveSecondaryText(this);
-            ((TextView)views[0]).setTextColor(color); ((TextView)views[1]).setTextColor(color);
+            LinearLayout item=(LinearLayout)nav.getChildAt(i);View[] views=(View[])item.getTag();
+            boolean selected=i==currentTab;int color=selected?primary:UiKit.resolveSecondaryText(this);
+            ((ImageView)views[0]).setColorFilter(color);
+            ((TextView)views[1]).setTextColor(color);
             ((TextView)views[1]).setTypeface(Typeface.DEFAULT,selected?Typeface.BOLD:Typeface.NORMAL);
-            GradientDrawable bg=new GradientDrawable();
-            bg.setCornerRadius(UiKit.dp(this,18));
-            bg.setColor(selected?ColorUtils.setAlphaComponent(primary,28):Color.TRANSPARENT);
-            item.setBackground(bg);
+            GradientDrawable bg=new GradientDrawable();bg.setCornerRadius(UiKit.dp(this,18));
+            bg.setColor(selected?ColorUtils.setAlphaComponent(primary,28):Color.TRANSPARENT);item.setBackground(bg);
         }
     }
 
     private void render(){
-        content.removeAllViews(); styleNav();
+        content.removeAllViews();styleNav();
         if(currentTab==0)renderHome();
         else if(currentTab==1)renderPrint();
         else if(currentTab==2)renderProfiles();
@@ -164,199 +151,190 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private TextView section(String text){
-        TextView t=UiKit.heading(this,text,19); t.setPadding(0,UiKit.dp(this,14),0,UiKit.dp(this,5)); return t;
+        TextView t=UiKit.heading(this,text,19);t.setPadding(0,UiKit.dp(this,14),0,UiKit.dp(this,5));return t;
     }
 
     private void renderHome(){
         List<Profile> profiles=SecureStore.load(this);
-        long active=profiles.stream().filter(p->p.active).count();
         long connected=profiles.stream().filter(p->p.active&&p.connectionVerified).count();
-        int[] grad=SettingsStore.gradient(this);
+        int queued=OutboxStore.load(this).size();
 
-        LinearLayout hero=new LinearLayout(this); hero.setOrientation(LinearLayout.VERTICAL); hero.setGravity(Gravity.CENTER_HORIZONTAL);
-        TextView shield=UiKit.heroTitle(this,"◇",42); shield.setGravity(Gravity.CENTER); hero.addView(shield);
-        String heroTitle=connected>0?"Verbindung bereit":(active>0?"Profile noch nicht geprüft":"Noch nicht eingerichtet");
-        TextView h=UiKit.heroTitle(this,heroTitle,24); h.setGravity(Gravity.CENTER); hero.addView(h);
-        String heroText=connected>0?connected+" verifiziertes Versandziel":(active>0?"Prüfe die Verbindung in den Profilen":"Lege zuerst ein Versandprofil an");
-        TextView b=UiKit.heroBody(this,heroText+" · TLS geschützt");
-        b.setGravity(Gravity.CENTER); b.setPadding(0,UiKit.dp(this,6),0,UiKit.dp(this,12)); hero.addView(b);
-        MaterialButton security=UiKit.primary(this,"Sicherheitsdetails");
-        security.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0x33FFFFFF));
-        security.setOnClickListener(v->navigateTo(3)); hero.addView(security);
-        content.addView(UiKit.hero(this,hero,grad[0],grad[1]));
+        if(connected==0){
+            int[] g=SettingsStore.gradient(this);
+            LinearLayout hero=new LinearLayout(this);hero.setOrientation(LinearLayout.VERTICAL);
+            hero.addView(UiKit.heroTitle(this,"Versand noch nicht eingerichtet",23));
+            hero.addView(UiKit.heroBody(this,"Lege ein Profil bei Deutsche Post oder LetterXpress an und prüfe die Verbindung."));
+            content.addView(UiKit.hero(this,hero,g[0],g[1]));
+        }
 
-        LinearLayout metrics=new LinearLayout(this); metrics.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout metrics=new LinearLayout(this);metrics.setOrientation(LinearLayout.HORIZONTAL);
         metrics.addView(metric("Verbindungen",String.valueOf(connected),"verifiziert"),new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1f));
-        View gap=new View(this); metrics.addView(gap,new LinearLayout.LayoutParams(UiKit.dp(this,12),1));
-        metrics.addView(metric("Dokument",selectedPdf==null?"Keins":"Bereit",selectedPdf==null?"PDF wählen":"versandbereit"),new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1f));
+        metrics.addView(new View(this),new LinearLayout.LayoutParams(UiKit.dp(this,12),1));
+        metrics.addView(metric("Druckausgang",String.valueOf(queued),queued==1?"PDF":"PDFs"),new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1f));
         content.addView(metrics);
 
+        Profile api=firstLetterXpressApi(profiles);
+        if(api!=null){
+            LinearLayout titleRow=new LinearLayout(this);titleRow.setGravity(Gravity.CENTER_VERTICAL);
+            titleRow.addView(section("Letzte LetterXpress-Sendungen"),new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1f));
+            MaterialButton refresh=UiKit.tonal(this,"Aktualisieren");refresh.setOnClickListener(v->{recentCache.clear();loadRecent(api,true);});
+            titleRow.addView(refresh,new LinearLayout.LayoutParams(UiKit.dp(this,118),UiKit.dp(this,44)));content.addView(titleRow);
+            recentContainer=new LinearLayout(this);recentContainer.setOrientation(LinearLayout.VERTICAL);content.addView(recentContainer);
+            if(recentCache.isEmpty())loadRecent(api,false);else showRecent(recentCache);
+        }
+    }
+
+    private Profile firstLetterXpressApi(List<Profile> profiles){
+        for(Profile p:profiles)if(p.active&&Profile.PROVIDER_LETTERXPRESS.equals(p.provider)&&Profile.TYPE_LXP_API.equals(p.type))return p;
+        return null;
+    }
+
+    private void loadRecent(Profile p,boolean force){
+        if(historyLoading)return;
+        historyLoading=true;
+        if(recentContainer!=null){recentContainer.removeAllViews();recentContainer.addView(UiKit.body(this,"Sendungen werden geladen…"));}
+        new Thread(()->{
+            try{
+                List<RecentLetter> jobs=LetterXpressApiClient.recentJobs(p,5);
+                runOnUiThread(()->{historyLoading=false;recentCache=jobs;if(currentTab==0&&recentContainer!=null)showRecent(jobs);});
+            }catch(Exception e){
+                runOnUiThread(()->{historyLoading=false;if(currentTab==0&&recentContainer!=null){recentContainer.removeAllViews();recentContainer.addView(UiKit.body(this,"Sendungshistorie derzeit nicht verfügbar."));}});
+            }
+        },"lxp-history").start();
+    }
+
+    private void showRecent(List<RecentLetter> jobs){
+        recentContainer.removeAllViews();
+        if(jobs.isEmpty()){recentContainer.addView(UiKit.body(this,"Noch keine Sendungen gefunden."));return;}
+        for(RecentLetter j:jobs){
+            LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);
+            LinearLayout head=new LinearLayout(this);head.setGravity(Gravity.CENTER_VERTICAL);
+            TextView title=UiKit.heading(this,j.filename==null||j.filename.isBlank()?"Auftrag #"+j.id:j.filename,15);
+            head.addView(title,new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1f));
+            head.addView(UiKit.pill(this,statusLabel(j.status),"sent".equalsIgnoreCase(j.status)||"done".equalsIgnoreCase(j.status)));
+            box.addView(head);
+            String details=(j.address==null?"":j.address)+(j.createdAt==null||j.createdAt.isBlank()?"":"\n"+j.createdAt);
+            TextView d=UiKit.body(this,details);d.setTextSize(12);d.setPadding(0,UiKit.dp(this,5),0,0);box.addView(d);
+            if(j.amount>0){
+                TextView price=UiKit.heading(this,String.format(java.util.Locale.GERMANY,"%.2f €",j.amount+j.vat),15);
+                price.setPadding(0,UiKit.dp(this,5),0,0);box.addView(price);
+            }
+            recentContainer.addView(UiKit.surfaceCard(this,box));
+        }
+    }
+
+    private String statusLabel(String status){
+        if(status==null||status.isBlank())return "Unbekannt";
+        switch(status.toLowerCase(java.util.Locale.ROOT)){
+            case "sent":return "Versendet";
+            case "done":return "Verarbeitet";
+            case "queue":return "Warteschlange";
+            case "hold":return "Angehalten";
+            case "canceled":return "Storniert";
+            case "draft":return "Postbox";
+            default:return status;
+        }
     }
 
     private MaterialCardView metric(String label,String value,String sub){
-        LinearLayout box=new LinearLayout(this); box.setOrientation(LinearLayout.VERTICAL);
-        TextView l=UiKit.body(this,label); l.setTextSize(12); box.addView(l);
-        TextView v=UiKit.heading(this,value,24); v.setPadding(0,UiKit.dp(this,5),0,0); box.addView(v);
-        TextView s=UiKit.body(this,sub); s.setTextSize(12); box.addView(s);
+        LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);
+        TextView l=UiKit.body(this,label);l.setTextSize(12);box.addView(l);
+        TextView v=UiKit.heading(this,value,24);v.setPadding(0,UiKit.dp(this,5),0,0);box.addView(v);
+        TextView s=UiKit.body(this,sub);s.setTextSize(12);box.addView(s);
         return UiKit.surfaceCard(this,box);
     }
 
-    private MaterialCardView actionCard(String icon,String title,String subtitle,Runnable action){
-        LinearLayout row=new LinearLayout(this); row.setGravity(Gravity.CENTER_VERTICAL);
-        TextView ic=new TextView(this); ic.setText(icon); ic.setTextSize(24); ic.setGravity(Gravity.CENTER); ic.setTextColor(SettingsStore.primary(this));
-        row.addView(ic,new LinearLayout.LayoutParams(UiKit.dp(this,50),UiKit.dp(this,50)));
-        LinearLayout txt=new LinearLayout(this); txt.setOrientation(LinearLayout.VERTICAL);
-        txt.addView(UiKit.heading(this,title,16)); TextView s=UiKit.body(this,subtitle); s.setTextSize(13); txt.addView(s);
-        row.addView(txt,new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1f));
-        TextView arrow=UiKit.heading(this,"›",26); row.addView(arrow,new LinearLayout.LayoutParams(UiKit.dp(this,28),UiKit.dp(this,42)));
-        MaterialCardView card=UiKit.surfaceCard(this,row); card.setClickable(true); card.setOnClickListener(v->action.run()); return card;
+    private MaterialCardView actionCard(int iconRes,String title,String subtitle,Runnable action){
+        LinearLayout row=new LinearLayout(this);row.setGravity(Gravity.CENTER_VERTICAL);
+        ImageView icon=new ImageView(this);icon.setImageResource(iconRes);icon.setColorFilter(SettingsStore.primary(this));
+        row.addView(icon,new LinearLayout.LayoutParams(UiKit.dp(this,42),UiKit.dp(this,42)));
+        LinearLayout text=new LinearLayout(this);text.setOrientation(LinearLayout.VERTICAL);text.setPadding(UiKit.dp(this,10),0,0,0);
+        text.addView(UiKit.heading(this,title,16));TextView sub=UiKit.body(this,subtitle);sub.setTextSize(13);text.addView(sub);
+        row.addView(text,new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1f));
+        TextView arrow=UiKit.heading(this,"›",26);row.addView(arrow,new LinearLayout.LayoutParams(UiKit.dp(this,28),UiKit.dp(this,42)));
+        MaterialCardView card=UiKit.surfaceCard(this,row);card.setClickable(true);card.setOnClickListener(v->action.run());return card;
     }
 
     private void renderPrint(){
-        int[] grad=SettingsStore.gradient(this);
-        LinearLayout hero=new LinearLayout(this); hero.setOrientation(LinearLayout.VERTICAL); hero.setGravity(Gravity.CENTER_HORIZONTAL);
-        TextView icon=UiKit.heroTitle(this,"▣",42); icon.setGravity(Gravity.CENTER); hero.addView(icon);
-        TextView title=UiKit.heroTitle(this,selectedPdf==null?"Bereit zum Drucken":"PDF bereit",24); title.setGravity(Gravity.CENTER); hero.addView(title);
-        TextView detail=UiKit.heroBody(this,selectedPdf==null?"PDF öffnen und Versandprofil wählen":safeName(selectedPdf));
-        detail.setGravity(Gravity.CENTER); detail.setPadding(0,UiKit.dp(this,5),0,UiKit.dp(this,12)); hero.addView(detail);
-        MaterialButton choose=UiKit.primary(this,selectedPdf==null?"PDF öffnen":"Andere PDF wählen");
-        choose.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0x33FFFFFF)); choose.setOnClickListener(v->picker.launch(new String[]{"application/pdf"})); hero.addView(choose);
-        content.addView(UiKit.hero(this,hero,grad[0],grad[1]));
+        int queued=OutboxStore.load(this).size();
+        content.addView(section("Druckausgang"));
+        LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);
+        box.addView(UiKit.heading(this,queued==0?"Bereit für PDFs":queued+" PDF"+(queued==1?"":"s")+" warten",20));
+        TextView help=UiKit.body(this,"Mehrere PDFs verbinden, Reihenfolge festlegen, Vorschau prüfen und erst danach Versandprofil und Kosten vergleichen.");
+        help.setPadding(0,UiKit.dp(this,6),0,UiKit.dp(this,12));box.addView(help);
+        MaterialButton open=UiKit.primary(this,queued==0?"PDFs hinzufügen":"Druckausgang öffnen");
+        open.setOnClickListener(v->startActivity(new Intent(this,OutboxActivity.class)));box.addView(open);
+        content.addView(UiKit.surfaceCard(this,box));
 
-        List<Profile> profiles=SecureStore.load(this); content.addView(section("Versandprofil wählen"));
-        if(profiles.stream().noneMatch(p->p.active)){
-            content.addView(UiKit.surfaceCard(this,UiKit.body(this,"Kein aktives Profil vorhanden.")));
-            MaterialButton add=UiKit.primary(this,"Profil anlegen"); add.setOnClickListener(v->startActivity(new Intent(this,ProfileEditActivity.class))); content.addView(add); return;
-        }
-
-        RadioGroup group=new RadioGroup(this);
-        for(Profile p:profiles){
-            if(!p.active)continue;
-            RadioButton rb=new RadioButton(this); rb.setId(View.generateViewId()); rb.setTag(p.id);
-            rb.setButtonTintList(android.content.res.ColorStateList.valueOf(SettingsStore.primary(this)));
-            rb.setText(p.name+"\n"+profileSummary(p)); rb.setTextSize(15);
-            rb.setPadding(UiKit.dp(this,6),UiKit.dp(this,10),UiKit.dp(this,6),UiKit.dp(this,10));
-            if(selectedProfileId==null)selectedProfileId=p.id; rb.setChecked(p.id.equals(selectedProfileId)); group.addView(rb);
-        }
-        group.setOnCheckedChangeListener((g,id)->{View v=g.findViewById(id);if(v!=null)selectedProfileId=String.valueOf(v.getTag());});
-        content.addView(UiKit.surfaceCard(this,group));
-
-        MaterialButton send=UiKit.primary(this,"Jetzt senden"); send.setOnClickListener(v->sendSelected(send));
-        LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,56)); lp.setMargins(0,UiKit.dp(this,12),0,UiKit.dp(this,7)); content.addView(send,lp);
-        MaterialButton printService=UiKit.tonal(this,"Android-Druckdienst öffnen"); printService.setOnClickListener(v->startActivity(new Intent(Settings.ACTION_PRINT_SETTINGS))); content.addView(printService);
-    }
-
-    private String safeName(Uri uri){String n=uri.getLastPathSegment();return n==null?"PDF ausgewählt":n;}
-    private String profileSummary(Profile p){
-        String route=Profile.TYPE_IPP.equals(p.type)?"IPP":
-                Profile.TYPE_WEBDAV.equals(p.type)?"WebDAV":
-                Profile.TYPE_LXP_API.equals(p.type)?"API":"SFTP";
-        String provider=Profile.PROVIDER_LETTERXPRESS.equals(p.provider)?"LetterXpress":"Deutsche Post";
-        return provider+" · "+route+"  •  "+(p.duplex?"Beidseitig":"Einseitig")+"  •  "+(p.color?"Farbe":"S/W")+"  •  "+("Nein".equals(p.registeredMail)?"Standard":p.registeredMail);
-    }
-
-    private void sendSelected(View anchor){
-        if(selectedPdf==null){Snackbar.make(anchor,"Bitte zuerst ein PDF auswählen.",Snackbar.LENGTH_LONG).show();return;}
-        Profile p=SecureStore.find(this,selectedProfileId);
-        if(p==null){Snackbar.make(anchor,"Versandprofil fehlt.",Snackbar.LENGTH_LONG).show();return;}
-        anchor.setEnabled(false); Snackbar.make(anchor,"Sichere Übertragung läuft…",Snackbar.LENGTH_LONG).show();
-        new Thread(()->{
-            try{ProviderSender.send(this,selectedPdf,p,JobOptions.fromProfile(p));runOnUiThread(()->{anchor.setEnabled(true);Snackbar.make(anchor,"An Versanddienst übergeben.",Snackbar.LENGTH_LONG).show();});}
-            catch(Exception e){runOnUiThread(()->{anchor.setEnabled(true);DebugUtil.error(this,anchor,"Versand fehlgeschlagen",e);});}
-        },"epost-send").start();
+        String folder=SettingsStore.outboxFolder(this);
+        TextView folderInfo=UiKit.body(this,folder.isBlank()?"Kein Auto-Import-Ordner eingerichtet.":"Auto-Import-Ordner aktiv. PDFs werden beim Öffnen der App übernommen und nach erfolgreichem Versand gelöscht.");
+        folderInfo.setTextSize(13);folderInfo.setPadding(0,UiKit.dp(this,8),0,0);content.addView(folderInfo);
     }
 
     private void renderProfiles(){
-        content.addView(section("Profile verwalten"));
-        TextView intro=UiKit.body(this,"Profile verbinden bestehende Konten bei Deutsche Post oder LetterXpress mit dem Android-Druckdienst.");
-        intro.setPadding(0,0,0,UiKit.dp(this,8)); content.addView(intro);
+        content.addView(section("Profile"));
         for(Profile p:SecureStore.load(this)){
-            LinearLayout box=new LinearLayout(this); box.setOrientation(LinearLayout.VERTICAL);
-            LinearLayout head=new LinearLayout(this); head.setGravity(Gravity.CENTER_VERTICAL);
-            android.widget.ImageView providerIcon=new android.widget.ImageView(this);
-            providerIcon.setImageResource(Profile.PROVIDER_LETTERXPRESS.equals(p.provider)?R.drawable.ic_provider_lxp:R.drawable.ic_provider_post);
-            providerIcon.setContentDescription(Profile.PROVIDER_LETTERXPRESS.equals(p.provider)?"LetterXpress":"Deutsche Post");
-            head.addView(providerIcon,new LinearLayout.LayoutParams(UiKit.dp(this,38),UiKit.dp(this,38)));
-            TextView profileName=UiKit.heading(this,p.name,17);profileName.setPadding(UiKit.dp(this,10),0,0,0);
-            head.addView(profileName,new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1f));
-            String status=!p.active?"Inaktiv":(p.connectionVerified?"Verbunden":"Nicht geprüft");
-            head.addView(UiKit.pill(this,status,p.connectionVerified)); box.addView(head);
-            TextView summary=UiKit.body(this,profileSummary(p)); summary.setPadding(0,UiKit.dp(this,7),0,UiKit.dp(this,5)); box.addView(summary);
-            box.addView(UiKit.mono(this,redactUrl(p.url)));
-            MaterialButton edit=UiKit.tonal(this,"Bearbeiten & prüfen"); edit.setOnClickListener(v->{Intent i=new Intent(this,ProfileEditActivity.class);i.putExtra("profileId",p.id);startActivity(i);});
-            LinearLayout.LayoutParams ep=new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,48)); ep.setMargins(0,UiKit.dp(this,12),0,0); box.addView(edit,ep);
+            LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);
+            LinearLayout head=new LinearLayout(this);head.setGravity(Gravity.CENTER_VERTICAL);
+            ImageView icon=new ImageView(this);icon.setImageResource(Profile.PROVIDER_LETTERXPRESS.equals(p.provider)?R.drawable.ic_provider_lxp:R.drawable.ic_provider_post);
+            icon.setContentDescription(Profile.PROVIDER_LETTERXPRESS.equals(p.provider)?"LetterXpress":"Deutsche Post");
+            head.addView(icon,new LinearLayout.LayoutParams(UiKit.dp(this,40),UiKit.dp(this,40)));
+            TextView name=UiKit.heading(this,p.name,17);name.setPadding(UiKit.dp(this,10),0,0,0);
+            head.addView(name,new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1f));
+            String status=!p.active?"Inaktiv":p.connectionVerified?"Verbunden":"Nicht geprüft";
+            head.addView(UiKit.pill(this,status,p.connectionVerified));box.addView(head);
+            TextView route=UiKit.body(this,profileSummary(p));route.setPadding(0,UiKit.dp(this,7),0,UiKit.dp(this,8));box.addView(route);
+            MaterialButton edit=UiKit.tonal(this,"Bearbeiten & prüfen");edit.setOnClickListener(v->{Intent i=new Intent(this,ProfileEditActivity.class);i.putExtra("profileId",p.id);startActivity(i);});box.addView(edit);
             content.addView(UiKit.surfaceCard(this,box));
         }
-        MaterialButton add=UiKit.primary(this,"+  Profil hinzufügen"); add.setOnClickListener(v->startActivity(new Intent(this,ProfileEditActivity.class)));
-        LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,54)); lp.setMargins(0,UiKit.dp(this,12),0,0); content.addView(add,lp);
+        MaterialButton add=UiKit.primary(this,"+ Profil hinzufügen");add.setOnClickListener(v->startActivity(new Intent(this,ProfileEditActivity.class)));
+        content.addView(add,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,54)));
     }
 
-    private String redactUrl(String u){
-        try{Uri x=Uri.parse(Sender.normalizeSecureUrl(u));return x.getScheme()+"://"+x.getHost()+"/…";}
-        catch(Exception e){return "Noch nicht konfiguriert";}
+    private String profileSummary(Profile p){
+        String route=Profile.TYPE_IPP.equals(p.type)?"IPP":Profile.TYPE_WEBDAV.equals(p.type)?"WebDAV":Profile.TYPE_LXP_API.equals(p.type)?"API":"SFTP";
+        return (Profile.PROVIDER_LETTERXPRESS.equals(p.provider)?"LetterXpress":"Deutsche Post")+" · "+route;
     }
 
     private void renderSettings(){
         content.addView(section("Darstellung"));
-
-        LinearLayout modeBox=new LinearLayout(this); modeBox.setOrientation(LinearLayout.VERTICAL);
-        modeBox.addView(UiKit.heading(this,"Erscheinungsbild",17));
-        TextView mh=UiKit.body(this,"System, Hell oder Dunkel"); mh.setPadding(0,UiKit.dp(this,4),0,UiKit.dp(this,10)); modeBox.addView(mh);
+        LinearLayout modeBox=new LinearLayout(this);modeBox.setOrientation(LinearLayout.VERTICAL);
         com.google.android.material.button.MaterialButtonToggleGroup modes=new com.google.android.material.button.MaterialButtonToggleGroup(this);
-        modes.setSingleSelection(true); modes.setSelectionRequired(true);
+        modes.setSingleSelection(true);modes.setSelectionRequired(true);
         String[][] md={{"System","system"},{"Hell","light"},{"Dunkel","dark"}};
         for(String[] m:md){
-            MaterialButton bt=UiKit.tonal(this,m[0]); bt.setId(View.generateViewId()); bt.setTag(m[1]);
+            MaterialButton bt=UiKit.tonal(this,m[0]);bt.setId(View.generateViewId());bt.setTag(m[1]);
             modes.addView(bt,new LinearLayout.LayoutParams(0,UiKit.dp(this,48),1f));
             if(m[1].equals(SettingsStore.appearance(this)))modes.check(bt.getId());
         }
-        modes.addOnButtonCheckedListener((g,id,checked)->{
-            if(checked){View v=g.findViewById(id);if(v!=null)SettingsStore.setAppearance(MainActivity.this,String.valueOf(v.getTag()));}
-        });
-        modeBox.addView(modes);
-        content.addView(UiKit.surfaceCard(this,modeBox));
+        modes.addOnButtonCheckedListener((g,id,checked)->{if(checked){View v=g.findViewById(id);if(v!=null)SettingsStore.setAppearance(this,String.valueOf(v.getTag()));}});
+        modeBox.addView(modes);content.addView(UiKit.surfaceCard(this,modeBox));
 
-        LinearLayout paletteBox=new LinearLayout(this); paletteBox.setOrientation(LinearLayout.VERTICAL);
-        paletteBox.addView(UiKit.heading(this,"Farbpalette",17));
-        com.google.android.material.chip.ChipGroup chips=new com.google.android.material.chip.ChipGroup(this);
-        chips.setSingleSelection(true); chips.setSelectionRequired(true);
-        String[][] pd={{"Ocean","ocean"},{"Forest","forest"},{"Sunset","sunset"},{"Aurora","aurora"},{"Lavender","lavender"},{"Graphite","graphite"}};
-        for(String[] p:pd){
-            com.google.android.material.chip.Chip chip=new com.google.android.material.chip.Chip(this);
-            chip.setId(View.generateViewId()); chip.setText(p[0]); chip.setTag(p[1]); chip.setCheckable(true);
-            chip.setChecked(p[1].equals(SettingsStore.palette(this))); chip.setChipCornerRadius(UiKit.dp(this,18));
-            chip.setOnCheckedChangeListener((button,checked)->{
-                if(checked){
-                    String next=String.valueOf(button.getTag());
-                    if(!next.equals(SettingsStore.palette(MainActivity.this))){SettingsStore.setPalette(MainActivity.this,next);render();}
-                }
-            });
-            chips.addView(chip);
-        }
-        paletteBox.addView(chips);
-        content.addView(UiKit.surfaceCard(this,paletteBox));
+        content.addView(section("Druckausgang"));
+        LinearLayout folderBox=new LinearLayout(this);folderBox.setOrientation(LinearLayout.VERTICAL);
+        TextView folder=UiKit.body(this,SettingsStore.outboxFolder(this).isBlank()?"Kein Ordner gewählt":"Auto-Import ist eingerichtet");
+        folderBox.addView(folder);
+        TextView explain=UiKit.body(this,"PDFs in diesem Ordner werden beim Start und Öffnen der App automatisch in den Druckausgang übernommen. Nach erfolgreichem Versand löscht die App nur diese automatisch importierten Quelldateien.");
+        explain.setTextSize(13);explain.setPadding(0,UiKit.dp(this,5),0,UiKit.dp(this,10));folderBox.addView(explain);
+        MaterialButton choose=UiKit.tonal(this,"Ordner auswählen");choose.setOnClickListener(v->folderPicker.launch(null));folderBox.addView(choose);
+        content.addView(UiKit.surfaceCard(this,folderBox));
 
         content.addView(section("Diagnose"));
-        LinearLayout debugBox=new LinearLayout(this); debugBox.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout debugBox=new LinearLayout(this);debugBox.setOrientation(LinearLayout.VERTICAL);
         com.google.android.material.materialswitch.MaterialSwitch debug=new com.google.android.material.materialswitch.MaterialSwitch(this);
-        debug.setText("Debugmodus"); debug.setChecked(SettingsStore.debugMode(this));
-        debug.setOnCheckedChangeListener((button,checked)->SettingsStore.setDebugMode(MainActivity.this,checked));
-        debugBox.addView(debug);
-        TextView dh=UiKit.body(this,"Im Debugmodus bleiben Fehler sichtbar und werden automatisch in die Zwischenablage kopiert. Ohne Debugmodus verschwinden Fehlermeldungen kurz danach.");
-        dh.setTextSize(13); debugBox.addView(dh);
+        debug.setText("Debugmodus");debug.setChecked(SettingsStore.debugMode(this));debug.setOnCheckedChangeListener((b,c)->SettingsStore.setDebugMode(this,c));debugBox.addView(debug);
+        TextView dh=UiKit.body(this,"Technische Fehler bleiben sichtbar und werden automatisch in die Zwischenablage kopiert.");dh.setTextSize(13);debugBox.addView(dh);
         content.addView(UiKit.surfaceCard(this,debugBox));
 
         content.addView(section("Werkzeuge"));
-        content.addView(actionCard("⌖","Versandfeld-Assistent","PDF laden und den Adressbereich des eigenen Brieflayouts markieren",()->startActivity(new Intent(this,AddressConfigActivity.class))));
-        content.addView(actionCard("⚙","Android-Druckdienst","E-POST Helper als Systemdrucker aktivieren",()->startActivity(new Intent(Settings.ACTION_PRINT_SETTINGS))));
+        content.addView(actionCard(R.drawable.ic_nav_profiles,"Versandfeld-Assistent","Adressbereiche am eigenen PDF-Brieflayout festlegen",()->startActivity(new Intent(this,AddressConfigActivity.class))));
+        content.addView(actionCard(R.drawable.ic_nav_print,"Android-Druckdienst","Briefversand als Android-Systemdrucker aktivieren",()->startActivity(new Intent(Settings.ACTION_PRINT_SETTINGS))));
 
-        TextView security=UiKit.body(this,"Sicherheit: nur HTTPS/IPPS, TLS 1.2/1.3, Zertifikats- und Hostnameprüfung. Zugangsdaten werden verschlüsselt im Android Keystore gespeichert.");
-        security.setTextSize(12); security.setPadding(0,UiKit.dp(this,14),0,0); content.addView(security);
-    }
+        TextView security=UiKit.body(this,"TLS-geschützte Übertragung, Zertifikatsprüfung und verschlüsselte lokale Zugangsdaten.");
+        security.setTextSize(12);security.setPadding(0,UiKit.dp(this,14),0,UiKit.dp(this,18));content.addView(security);
 
-    private MaterialCardView infoCard(String title,String text){
-        LinearLayout box=new LinearLayout(this); box.setOrientation(LinearLayout.VERTICAL);
-        box.addView(UiKit.heading(this,title,17)); TextView b=UiKit.body(this,text); b.setPadding(0,UiKit.dp(this,7),0,0); box.addView(b);
-        return UiKit.surfaceCard(this,box);
+        TextView vibe=UiKit.heading(this,"Vibecoded with ❤️",14);vibe.setGravity(Gravity.CENTER);content.addView(vibe);
+        TextView github=UiKit.body(this,"github.com/3115a083/epost-helper");github.setGravity(Gravity.CENTER);github.setTextColor(SettingsStore.primary(this));github.setPadding(0,UiKit.dp(this,5),0,UiKit.dp(this,12));
+        github.setOnClickListener(v->startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse("https://github.com/3115a083/epost-helper"))));content.addView(github);
     }
 }
