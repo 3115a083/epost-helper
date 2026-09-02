@@ -198,11 +198,14 @@ public class AddressEditActivity extends AppCompatActivity {
         if(sourceMode){
             preview.setBoxes(sourceSender,sourceRecipient);
             preview.setReservedArea(null,null);
+            preview.setRecipientSafetyArea(null,null);
             if(snap.isChecked())snap.setChecked(false);
         }else{
             preview.setBoxes(targetSender,targetRecipient);
             RectF reserved=profile==null?new RectF():AddressLayoutRules.reserved(profile,options);
-            preview.setReservedArea(reserved,reserved.isEmpty()?null:"Reserviert");
+            RectF safety=profile==null?new RectF():AddressLayoutRules.recipientSafety(profile,options);
+            preview.setReservedArea(reserved,reserved.isEmpty()?null:"Reserviert für Einschreiben");
+            preview.setRecipientSafetyArea(safety,safety.isEmpty()?null:"Sicherheitsreserve bei voller Adresse");
         }
         updateHint();
     }
@@ -213,7 +216,10 @@ public class AddressEditActivity extends AppCompatActivity {
         }else if(preview!=null&&preview.hasCollision()){
             hint.setText("Die Zielposition kollidiert mit einer reservierten Fläche. Verschiebe die Rahmen, bis die rote Markierung verschwindet.");
         }else{
-            hint.setText("Lege die Zielposition für den versendeten Brief fest. Der Ausschnitt zeigt bewusst nur den relevanten Adressbereich.");
+            RectF safety=profile==null?new RectF():AddressLayoutRules.recipientSafety(profile,options);
+            hint.setText(safety.isEmpty()
+                    ?"Lege die Zielposition für den versendeten Brief fest. Der Ausschnitt zeigt bewusst nur den relevanten Adressbereich."
+                    :"Violett zeigt die zusätzliche Höhe, die ein vollständig gefülltes normales Adressfenster nach dem Verschieben für Einschreiben benötigen würde. So erkennst du vor dem Versand, ob Text außerhalb des sichtbaren Einschreibenfensters liegen könnte.");
         }
     }
 
