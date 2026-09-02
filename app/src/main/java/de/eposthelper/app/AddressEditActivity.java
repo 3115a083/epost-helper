@@ -11,6 +11,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.HorizontalScrollView;
 import android.widget.LinearLayout;
+import android.widget.ScrollView;
 import android.widget.TextView;
 
 import androidx.appcompat.app.AppCompatActivity;
@@ -150,7 +151,11 @@ public class AddressEditActivity extends AppCompatActivity {
             updateHint();
         });
         horizontal.addView(preview,new HorizontalScrollView.LayoutParams(getResources().getDisplayMetrics().widthPixels*2,ViewGroup.LayoutParams.WRAP_CONTENT));
-        page.addView(horizontal,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,0,1f));
+        ScrollView vertical=new ScrollView(this);
+        vertical.setFillViewport(true);
+        vertical.setVerticalScrollBarEnabled(true);
+        vertical.addView(horizontal,new ScrollView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.WRAP_CONTENT));
+        page.addView(vertical,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,0,1f));
 
         LinearLayout bottom=new LinearLayout(this);
         bottom.setPadding(UiKit.dp(this,16),UiKit.dp(this,8),UiKit.dp(this,16),UiKit.dp(this,16));
