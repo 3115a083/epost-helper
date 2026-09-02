@@ -32,6 +32,7 @@ public class AdvancedPrintOptionsActivity extends AppCompatActivity {
     @Override protected void onCreate(Bundle b){
         SettingsStore.applySavedAppearance(this);
         super.onCreate(b);
+        SettingsStore.applyDynamicColors(this);
         jobInfo=getIntent().getParcelableExtra(android.printservice.PrintService.EXTRA_PRINT_JOB_INFO);
         PrinterInfo printer=getIntent().getParcelableExtra(android.printservice.PrintService.EXTRA_PRINTER_INFO);
         documentInfo=getIntent().getParcelableExtra(android.printservice.PrintService.EXTRA_PRINT_DOCUMENT_INFO);
