@@ -167,7 +167,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void renderHome(){
         List<Profile> profiles=SecureStore.load(this);
-        long connected=profiles.stream().filter(p->p.active&&p.connectionVerified).count();
+        long connected=profiles.stream().filter(p->p.active&&p.connectionVerified&&!DebugProfileManager.isDebug(p)).count();
         int queued=OutboxStore.load(this).size();
         int[] g=SettingsStore.gradient(this);
 
