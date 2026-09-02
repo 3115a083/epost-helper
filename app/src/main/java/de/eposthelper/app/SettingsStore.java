@@ -8,6 +8,7 @@ public final class SettingsStore {
     private static final String PREF="ui_settings";
     private static final String MODE="appearance";
     private static final String PALETTE="palette";
+    private static final String DEBUG="debug";
     private SettingsStore(){}
 
     public static String appearance(Context c){
@@ -42,6 +43,13 @@ public final class SettingsStore {
             default: return 0xFF2457E6;
         }
     }
+    public static boolean debugMode(Context c){
+        return c.getSharedPreferences(PREF,Context.MODE_PRIVATE).getBoolean(DEBUG,false);
+    }
+    public static void setDebugMode(Context c,boolean enabled){
+        c.getSharedPreferences(PREF,Context.MODE_PRIVATE).edit().putBoolean(DEBUG,enabled).apply();
+    }
+
     public static int[] gradient(Context c){
         switch(palette(c)){
             case "forest": return new int[]{0xFF216B57,0xFF4AB985};
