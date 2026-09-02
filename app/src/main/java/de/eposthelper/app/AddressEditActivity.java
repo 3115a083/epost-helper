@@ -44,6 +44,8 @@ public class AddressEditActivity extends AppCompatActivity {
     private MaterialSwitch snap;
     private TextView hint;
     private HorizontalScrollView horizontal;
+    private ScrollView vertical;
+    private TextView previewStatus;
     private Bitmap bitmap;
     private float zoom=2.2f;
 
@@ -137,24 +139,34 @@ public class AddressEditActivity extends AppCompatActivity {
         controls.addView(tools);
         page.addView(controls);
 
+        previewStatus=UiKit.body(this,"PDF wird geladen…");
+        previewStatus.setGravity(Gravity.CENTER);
+        previewStatus.setPadding(UiKit.dp(this,16),UiKit.dp(this,8),UiKit.dp(this,16),UiKit.dp(this,8));
+        page.addView(previewStatus);
+
         horizontal=new HorizontalScrollView(this);
         horizontal.setFillViewport(false);
         horizontal.setHorizontalScrollBarEnabled(true);
         horizontal.setOverScrollMode(View.OVER_SCROLL_ALWAYS);
+
         preview=new AddressConfigView(this);
         preview.setFullPage(true);
         preview.setInteractive(true);
         preview.setSnapEnabled(false);
+        preview.setBackgroundColor(android.graphics.Color.WHITE);
         preview.setListener((sender,recipient)->{
             if(sourceMode){sourceSender=new RectF(sender);sourceRecipient=new RectF(recipient);}
             else{targetSender=new RectF(sender);targetRecipient=new RectF(recipient);}
             updateHint();
         });
-        horizontal.addView(preview,new HorizontalScrollView.LayoutParams(getResources().getDisplayMetrics().widthPixels*2,ViewGroup.LayoutParams.WRAP_CONTENT));
-        ScrollView vertical=new ScrollView(this);
-        vertical.setFillViewport(true);
+
+        int initialWidth=Math.max(getResources().getDisplayMetrics().widthPixels-UiKit.dp(this,24),UiKit.dp(this,320));
+        horizontal.addView(preview,new HorizontalScrollView.LayoutParams(initialWidth,UiKit.dp(this,900)));
+
+        vertical=new ScrollView(this);
+        vertical.setFillViewport(false);
         vertical.setVerticalScrollBarEnabled(true);
-        vertical.addView(horizontal,new ScrollView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.WRAP_CONTENT));
+        vertical.addView(horizontal,new ScrollView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,900)));
         page.addView(vertical,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,0,1f));
 
         LinearLayout bottom=new LinearLayout(this);
@@ -175,15 +187,26 @@ public class AddressEditActivity extends AppCompatActivity {
         int screen=getResources().getDisplayMetrics().widthPixels;
         int width=Math.round((screen-UiKit.dp(this,24))*zoom);
         int resolvedWidth=Math.max(screen-UiKit.dp(this,24),width);
-        ViewGroup.LayoutParams lp=preview.getLayoutParams();
-        if(lp==null)lp=new HorizontalScrollView.LayoutParams(resolvedWidth,UiKit.dp(this,600));
-        lp.width=resolvedWidth;
+        int resolvedHeight;
         if(bitmap!=null&&bitmap.getWidth()>0){
-            lp.height=Math.max(UiKit.dp(this,520),Math.round(resolvedWidth*(bitmap.getHeight()/(float)bitmap.getWidth())));
+            resolvedHeight=Math.max(UiKit.dp(this,620),Math.round(resolvedWidth*(bitmap.getHeight()/(float)bitmap.getWidth())));
         }else{
-            lp.height=UiKit.dp(this,620);
+            resolvedHeight=UiKit.dp(this,900);
         }
+
+        ViewGroup.LayoutParams lp=preview.getLayoutParams();
+        if(lp==null)lp=new HorizontalScrollView.LayoutParams(resolvedWidth,resolvedHeight);
+        lp.width=resolvedWidth;
+        lp.height=resolvedHeight;
         preview.setLayoutParams(lp);
+
+        if(horizontal!=null){
+            ViewGroup.LayoutParams hp=horizontal.getLayoutParams();
+            if(hp!=null){
+                hp.height=resolvedHeight;
+                horizontal.setLayoutParams(hp);
+            }
+        }
     }
 
     private void saveCurrentBoxes(){
@@ -224,28 +247,33 @@ public class AddressEditActivity extends AppCompatActivity {
 
     private void loadPdf(){
         String path=getIntent().getStringExtra(EXTRA_FILE);
-        if(path==null)return;
+        if(path==null||path.isBlank()){
+            previewStatus.setText("PDF-Datei fehlt.");
+            return;
+        }
+        File file=new File(path);
+        if(!file.exists()||!file.canRead()){
+            previewStatus.setText("PDF-Datei ist nicht mehr verfügbar.");
+            return;
+        }
+
         new Thread(()->{
-            Bitmap result=null;
-            try(ParcelFileDescriptor pfd=ParcelFileDescriptor.open(new File(path),ParcelFileDescriptor.MODE_READ_ONLY);
-                PdfRenderer renderer=new PdfRenderer(pfd);
-                PdfRenderer.Page page=renderer.openPage(0)){
-                int width=1400;
-                int height=Math.max(1,Math.round(width*(page.getHeight()/(float)page.getWidth())));
-                result=Bitmap.createBitmap(width,height,Bitmap.Config.ARGB_8888);
-                android.graphics.Canvas paper=new android.graphics.Canvas(result);
-                paper.drawColor(android.graphics.Color.WHITE);
-                page.render(result,null,null,PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
-                Bitmap finalResult=result;
+            try{
+                Bitmap result=PdfPreviewRenderer.renderFirstPage(file,1400,PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
                 runOnUiThread(()->{
-                    bitmap=finalResult;
-                    preview.setBitmap(finalResult);
+                    bitmap=result;
+                    preview.setBitmap(result);
+                    previewStatus.setText("Seite 1 · Ziehen zum Bearbeiten");
                     updateZoom();
                     applyMode();
+                    preview.requestLayout();
+                    preview.invalidate();
                 });
             }catch(Exception e){
-                if(result!=null&&!result.isRecycled())result.recycle();
-                runOnUiThread(()->DebugUtil.error(this,preview,"PDF-Vorschau",e));
+                runOnUiThread(()->{
+                    previewStatus.setText("PDF konnte nicht angezeigt werden.");
+                    DebugUtil.error(this,preview,"PDF-Vorschau",e);
+                });
             }
         },"address-full-preview").start();
     }
