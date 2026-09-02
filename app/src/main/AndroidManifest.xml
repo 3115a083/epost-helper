@@ -11,6 +11,7 @@
         android:theme="@style/Theme.EPostHelper">
         <activity android:name=".ProfileEditActivity" android:exported="false" />
         <activity android:name=".AddressConfigActivity" android:exported="false" />
+        <activity android:name=".OutboxActivity" android:exported="false" />
         <activity android:name=".AdvancedPrintOptionsActivity" android:exported="true" android:permission="android.permission.START_PRINT_SERVICE_CONFIG_ACTIVITY" />
         <activity android:name=".MainActivity" android:exported="true">
             <intent-filter>
