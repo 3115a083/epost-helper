@@ -4,8 +4,8 @@
         <item name="colorSecondary">@color/epost_green</item>
         <item name="colorTertiary">@color/epost_violet</item>
         <item name="android:fontFamily">sans</item>
-        <item name="android:windowLightStatusBar">true</item>
-        <item name="android:navigationBarColor">?attr/colorSurface</item>
-        <item name="android:statusBarColor">?attr/colorSurface</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:windowActionModeOverlay">true</item>
     </style>
 </resources>
