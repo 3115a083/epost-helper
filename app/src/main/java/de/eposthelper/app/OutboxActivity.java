@@ -53,8 +53,25 @@ public class OutboxActivity extends AppCompatActivity {
     private LinearLayout profilePriceBox;
     private final List<RadioButton> profileButtons=new ArrayList<>();
 
+    private RectF sourceSender=AddressLayoutRules.normalSender();
+    private RectF sourceRecipient=AddressLayoutRules.normalRecipient();
     private RectF targetSender=AddressLayoutRules.normalSender();
     private RectF targetRecipient=AddressLayoutRules.normalRecipient();
+    private boolean addressEdited=false;
+
+    private final ActivityResultLauncher<Intent> addressEditor=registerForActivityResult(
+            new ActivityResultContracts.StartActivityForResult(),result->{
+                if(result.getResultCode()!=RESULT_OK||result.getData()==null)return;
+                Intent data=result.getData();
+                sourceSender=AddressCorrectionProcessor.decode(data.getStringExtra(AddressEditActivity.EXTRA_SOURCE_SENDER));
+                sourceRecipient=AddressCorrectionProcessor.decode(data.getStringExtra(AddressEditActivity.EXTRA_SOURCE_RECIPIENT));
+                targetSender=AddressCorrectionProcessor.decode(data.getStringExtra(AddressEditActivity.EXTRA_TARGET_SENDER));
+                targetRecipient=AddressCorrectionProcessor.decode(data.getStringExtra(AddressEditActivity.EXTRA_TARGET_RECIPIENT));
+                addressEdited=!sourceSender.isEmpty()&&!sourceRecipient.isEmpty();
+                if(localCorrection!=null)localCorrection.setChecked(true);
+                Profile p=SecureStore.find(this,selectedProfileId);
+                applyLayoutForProfile(p,true);
+            });
 
     private final ActivityResultLauncher<String[]> picker=registerForActivityResult(
             new ActivityResultContracts.OpenMultipleDocuments(),uris->{
@@ -290,7 +307,11 @@ public class OutboxActivity extends AppCompatActivity {
         addressPreview.setInteractive(false);
         if(previewBitmap!=null)addressPreview.setBitmap(previewBitmap.copy(Bitmap.Config.ARGB_8888,false));
         addressPreview.setListener((sender,recipient)->{targetSender=new RectF(sender);targetRecipient=new RectF(recipient);updateLayoutHint();});
-        addressBox.addView(addressPreview,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,350)));
+        addressBox.addView(addressPreview,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,430)));
+        MaterialButton editLarge=UiKit.primary(this,"Groß bearbeiten");
+        editLarge.setOnClickListener(v->openAddressEditor(editLarge));
+        LinearLayout.LayoutParams elp=new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,54));elp.setMargins(0,UiKit.dp(this,10),0,0);
+        addressBox.addView(editLarge,elp);
         root.addView(UiKit.surfaceCard(this,addressBox));
 
         root.addView(section("Kompatible Profile & Kosten"));
@@ -307,6 +328,7 @@ public class OutboxActivity extends AppCompatActivity {
         localCorrection.setOnCheckedChangeListener((b,checked)->{
             Profile p=SecureStore.find(this,selectedProfileId);
             applyLayoutForProfile(p,checked);
+            if(checked&&!addressEdited&&p!=null&&!AddressCorrectionProcessor.configured(p))openAddressEditor(b);
         });
 
         refreshProfiles();
@@ -423,56 +445,91 @@ public class OutboxActivity extends AppCompatActivity {
         if(addressPreview==null)return;
         JobOptions o=currentOptions();
         if(p==null){
-            addressPreview.setReservedArea(null,null);addressPreview.setInteractive(false);return;
+            addressPreview.setReservedArea(null,null);
+            addressPreview.setInteractive(false);
+            localCorrection.setEnabled(false);
+            return;
         }
 
         boolean remotePost=Profile.PROVIDER_POST.equals(p.provider)&&p.addressCorrection;
-        boolean configured=AddressCorrectionProcessor.configured(p);
-        localCorrection.setEnabled(!remotePost&&configured);
+        localCorrection.setEnabled(!remotePost);
 
         if(remotePost){
             localCorrection.setChecked(false);
-            RectF sourceS=AddressCorrectionProcessor.decode(p.senderWindow);
-            RectF sourceR=AddressCorrectionProcessor.decode(p.recipientWindow);
-            if(!sourceS.isEmpty()&&!sourceR.isEmpty())addressPreview.setBoxes(sourceS,sourceR);
-            addressPreview.setReservedArea(null,null);addressPreview.setInteractive(false);
-            layoutHint.setText("Dieses Deutsche-Post-Profil ist als serverseitig adresskorrigiert markiert. Die App verschiebt die Adresse deshalb nicht noch einmal.");
+            RectF configuredS=AddressCorrectionProcessor.decode(p.senderWindow);
+            RectF configuredR=AddressCorrectionProcessor.decode(p.recipientWindow);
+            if(!configuredS.isEmpty()&&!configuredR.isEmpty()){
+                sourceSender=new RectF(configuredS);sourceRecipient=new RectF(configuredR);
+                addressPreview.setBoxes(sourceSender,sourceRecipient);
+            }
+            addressPreview.setReservedArea(null,null);
+            addressPreview.setInteractive(false);
+            layoutHint.setText("Dieses Deutsche-Post-Profil nutzt bereits serverseitige Adresskorrektur. Lokale Korrektur bleibt deshalb aus.");
             return;
         }
 
-        if(!configured){
-            localCorrection.setChecked(false);
-            addressPreview.setInteractive(false);
-            addressPreview.setReservedArea(AddressLayoutRules.reserved(p,o),"Reserviert für DV-Freimachung");
-            layoutHint.setText("Für dieses Profil sind noch keine Quellbereiche gespeichert. Konfiguriere Absender und Empfänger zuerst im Versandfeld-Assistenten.");
-            return;
+        if(!addressEdited&&AddressCorrectionProcessor.configured(p)){
+            sourceSender=AddressCorrectionProcessor.decode(p.senderWindow);
+            sourceRecipient=AddressCorrectionProcessor.decode(p.recipientWindow);
+        }
+        if(!addressEdited&&!AddressCorrectionProcessor.configured(p)){
+            sourceSender=AddressLayoutRules.normalSender();
+            sourceRecipient=AddressLayoutRules.normalRecipient();
         }
 
         if(correctionRequested){
-            targetSender=AddressLayoutRules.targetSender(p,o);
-            targetRecipient=AddressLayoutRules.targetRecipient(p,o);
+            if(!addressEdited){
+                targetSender=AddressLayoutRules.targetSender(p,o);
+                targetRecipient=AddressLayoutRules.targetRecipient(p,o);
+            }
             addressPreview.setBoxes(targetSender,targetRecipient);
             addressPreview.setInteractive(true);
         }else{
-            targetSender=AddressCorrectionProcessor.decode(p.senderWindow);
-            targetRecipient=AddressCorrectionProcessor.decode(p.recipientWindow);
-            addressPreview.setBoxes(targetSender,targetRecipient);
+            addressPreview.setBoxes(sourceSender,sourceRecipient);
             addressPreview.setInteractive(false);
         }
+
         RectF reserved=AddressLayoutRules.reserved(p,o);
         addressPreview.setReservedArea(reserved,reserved.isEmpty()?null:"Reserviert für DV-Freimachung");
         updateLayoutHint();
+    }
+
+    private void openAddressEditor(View anchor){
+        Profile p=SecureStore.find(this,selectedProfileId);
+        if(p==null){DebugUtil.error(this,anchor,"Bitte zuerst ein Versandprofil wählen.");return;}
+        if(merged==null||!merged.exists()){DebugUtil.error(this,anchor,"Die PDF-Vorschau ist noch nicht verfügbar.");return;}
+
+        if(!addressEdited&&AddressCorrectionProcessor.configured(p)){
+            sourceSender=AddressCorrectionProcessor.decode(p.senderWindow);
+            sourceRecipient=AddressCorrectionProcessor.decode(p.recipientWindow);
+        }
+        if(!addressEdited){
+            targetSender=AddressLayoutRules.targetSender(p,currentOptions());
+            targetRecipient=AddressLayoutRules.targetRecipient(p,currentOptions());
+        }
+
+        Intent intent=new Intent(this,AddressEditActivity.class);
+        intent.putExtra(AddressEditActivity.EXTRA_FILE,merged.getAbsolutePath());
+        intent.putExtra(AddressEditActivity.EXTRA_PROFILE,p.id);
+        intent.putExtra(AddressEditActivity.EXTRA_REGISTERED,currentOptions().registered);
+        intent.putExtra(AddressEditActivity.EXTRA_SOURCE_SENDER,AddressCorrectionProcessor.encode(sourceSender));
+        intent.putExtra(AddressEditActivity.EXTRA_SOURCE_RECIPIENT,AddressCorrectionProcessor.encode(sourceRecipient));
+        intent.putExtra(AddressEditActivity.EXTRA_TARGET_SENDER,AddressCorrectionProcessor.encode(targetSender));
+        intent.putExtra(AddressEditActivity.EXTRA_TARGET_RECIPIENT,AddressCorrectionProcessor.encode(targetRecipient));
+        addressEditor.launch(intent);
     }
 
     private void updateLayoutHint(){
         Profile p=SecureStore.find(this,selectedProfileId);
         if(p==null)return;
         if(addressPreview.hasCollision()){
-            layoutHint.setText("Adressbereich kollidiert mit einer reservierten Zone. Aktiviere die Korrektur und verschiebe Absender/Empfänger, bis die rote Markierung verschwindet.");
+            layoutHint.setText("Adressbereich kollidiert mit einer reservierten Zone. Öffne „Groß bearbeiten“ und verschiebe die Zielposition.");
         }else if(localCorrection.isChecked()){
-            layoutHint.setText("Adresskorrektur aktiv. Die markierten Bereiche werden vor dem Versand aus dem Original ausgeschnitten und an dieser Position wieder eingesetzt.");
+            layoutHint.setText(addressEdited
+                    ?"Adresskorrektur aktiv. Original- und Zielbereiche wurden für diesen Brief bestätigt."
+                    :"Adresskorrektur aktiv. Öffne „Groß bearbeiten“, um die Originalbereiche dieses Briefes zu prüfen.");
         }else{
-            layoutHint.setText("Adresslayout geprüft. Aktiviere die Korrektur nur, wenn die aktuelle Position für die gewählte Versandart nicht geeignet ist.");
+            layoutHint.setText("Adresskorrektur ist aus. Über „Groß bearbeiten“ kannst du Original- und Zielbereiche in einer großen Vorschau prüfen.");
         }
     }
 
@@ -497,7 +554,7 @@ public class OutboxActivity extends AppCompatActivity {
             try{
                 File outgoing=source;
                 if(doCorrection){
-                    corrected=AddressCorrectionProcessor.apply(this,source,p,targetSender,targetRecipient);
+                    corrected=AddressCorrectionProcessor.apply(this,source,sourceSender,sourceRecipient,targetSender,targetRecipient);
                     outgoing=corrected;
                 }
                 ProviderSender.send(this,Uri.fromFile(outgoing),p,o);
