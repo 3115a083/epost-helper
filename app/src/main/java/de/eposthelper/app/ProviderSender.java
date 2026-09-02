@@ -7,6 +7,10 @@ public final class ProviderSender {
     private ProviderSender(){}
 
     public static void send(Context c,Uri pdf,Profile p,JobOptions o) throws Exception{
+        if(DebugProfileManager.isDebug(p)){
+            DebugSender.send(c,pdf,o,"source=ProviderSender");
+            return;
+        }
         if(Profile.PROVIDER_LETTERXPRESS.equals(p.provider)){
             if(Profile.TYPE_LXP_API.equals(p.type))LetterXpressApiClient.send(c,pdf,p,o);
             else if(Profile.TYPE_LXP_SFTP.equals(p.type))LetterXpressSftpClient.send(c,pdf,p,o);
