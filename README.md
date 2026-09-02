@@ -1,6 +1,6 @@
 # E-POST Helper
 
-Native Android app for submitting PDF documents to configured **E-POST MAILER** collection baskets (WebDAV) or network printers (IPP). Designed for F-Droid and built only from open-source Android dependencies.
+Native Android app for sending PDF documents through existing accounts at **Deutsche Post E-POST MAILER** or **LetterXpress**. Supported transports are E-POST WebDAV/IPP and LetterXpress API/SFTP. Designed for F-Droid and built only from open-source Android dependencies.
 
 > **Independent project.** This is not an official Deutsche Post AG app and is not affiliated with or endorsed by Deutsche Post AG.
 
@@ -72,3 +72,22 @@ Included: Android CI, CodeQL, Dependabot, signing-key exclusions and a security 
 E-POST may change endpoints, authentication, IPP behaviour, or validation rules. Test each target with E-POST’s own test mode before production use. Paid services are determined by the E-POST target configuration, not by local labels.
 
 See `SECURITY.md` for vulnerability reporting.
+
+
+## LetterXpress
+
+Profiles can use either the LetterXpress REST API v3 or SFTP.
+
+### API
+
+Create an API key in the LetterXpress customer area and enter the LetterXpress username and API key in the profile. The Android advanced print options expose simplex/duplex, colour, registered mail and C4. When the document page count is known, the app queries the LetterXpress price endpoint and displays the expected price before sending. Print jobs are submitted to `POST /v3/printjobs`.
+
+### SFTP
+
+LetterXpress SFTP uses `sftp.letterxpress.de` on port `279`. The app uses FILECODE filenames to transfer simplex/duplex, colour, national/international, C4 and registered-mail options. A pinned SSH host-key fingerprint is required before document upload. The connection test can discover the server fingerprint without accepting it for production transfer; compare it independently before storing it.
+
+## Android advanced print options
+
+Each active profile appears as a printer. Android's advanced print options activity is used for per-document provider settings instead of creating a separate virtual printer for every option combination. Currently implemented per-job options are simplex/duplex, colour, supported registered-mail modes and LetterXpress C4. LetterXpress API profiles can show a provider price quote; SFTP profiles show a public-list-price estimate.
+
+The PDF address helper stores sender and recipient source areas for the user's layout. Automatic PDF repositioning is intentionally not enabled yet, so the UI does not claim that stored address regions are already applied to outgoing documents.
