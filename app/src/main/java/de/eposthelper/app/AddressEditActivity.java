@@ -99,8 +99,10 @@ public class AddressEditActivity extends AppCompatActivity {
         modes.setSingleSelection(true);modes.setSelectionRequired(true);
         MaterialButton source=UiKit.tonal(this,"1 · Originalbereiche");
         source.setId(View.generateViewId());
+        source.setTextColor(UiKit.resolveText(this));
         MaterialButton target=UiKit.tonal(this,"2 · Zielposition");
         target.setId(View.generateViewId());
+        target.setTextColor(UiKit.resolveText(this));
         modes.addView(source,new LinearLayout.LayoutParams(0,UiKit.dp(this,48),1f));
         modes.addView(target,new LinearLayout.LayoutParams(0,UiKit.dp(this,48),1f));
         modes.check(source.getId());
@@ -118,7 +120,7 @@ public class AddressEditActivity extends AppCompatActivity {
         controls.addView(hint);
 
         LinearLayout tools=new LinearLayout(this);tools.setGravity(Gravity.CENTER_VERTICAL);
-        snap=new MaterialSwitch(this);snap.setText("Einrasten");
+        snap=new MaterialSwitch(this);snap.setText("Einrasten");snap.setTextColor(UiKit.resolveText(this));
         snap.setChecked(false);
         snap.setOnCheckedChangeListener((b,checked)->preview.setSnapEnabled(checked));
         tools.addView(snap,new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1f));
@@ -139,6 +141,7 @@ public class AddressEditActivity extends AppCompatActivity {
         horizontal.setHorizontalScrollBarEnabled(true);
         horizontal.setOverScrollMode(View.OVER_SCROLL_ALWAYS);
         preview=new AddressConfigView(this);
+        preview.setFullPage(true);
         preview.setInteractive(true);
         preview.setSnapEnabled(false);
         preview.setListener((sender,recipient)->{
@@ -146,7 +149,7 @@ public class AddressEditActivity extends AppCompatActivity {
             else{targetSender=new RectF(sender);targetRecipient=new RectF(recipient);}
             updateHint();
         });
-        horizontal.addView(preview,new HorizontalScrollView.LayoutParams(getResources().getDisplayMetrics().widthPixels*2,ViewGroup.LayoutParams.MATCH_PARENT));
+        horizontal.addView(preview,new HorizontalScrollView.LayoutParams(getResources().getDisplayMetrics().widthPixels*2,ViewGroup.LayoutParams.WRAP_CONTENT));
         page.addView(horizontal,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,0,1f));
 
         LinearLayout bottom=new LinearLayout(this);
@@ -166,9 +169,15 @@ public class AddressEditActivity extends AppCompatActivity {
         if(preview==null)return;
         int screen=getResources().getDisplayMetrics().widthPixels;
         int width=Math.round((screen-UiKit.dp(this,24))*zoom);
+        int resolvedWidth=Math.max(screen-UiKit.dp(this,24),width);
         ViewGroup.LayoutParams lp=preview.getLayoutParams();
-        if(lp==null)lp=new HorizontalScrollView.LayoutParams(width,ViewGroup.LayoutParams.MATCH_PARENT);
-        lp.width=Math.max(screen-UiKit.dp(this,24),width);
+        if(lp==null)lp=new HorizontalScrollView.LayoutParams(resolvedWidth,UiKit.dp(this,600));
+        lp.width=resolvedWidth;
+        if(bitmap!=null&&bitmap.getWidth()>0){
+            lp.height=Math.max(UiKit.dp(this,520),Math.round(resolvedWidth*(bitmap.getHeight()/(float)bitmap.getWidth())));
+        }else{
+            lp.height=UiKit.dp(this,620);
+        }
         preview.setLayoutParams(lp);
     }
 
@@ -224,6 +233,7 @@ public class AddressEditActivity extends AppCompatActivity {
                 runOnUiThread(()->{
                     bitmap=finalResult;
                     preview.setBitmap(finalResult);
+                    updateZoom();
                     applyMode();
                 });
             }catch(Exception e){
