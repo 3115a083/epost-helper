@@ -166,6 +166,8 @@ public class AddressConfigActivity extends AppCompatActivity {
                         int w=Math.max(1,Math.round(page.getWidth()*factor));
                         int h=Math.max(1,Math.round(page.getHeight()*factor));
                         bitmap=Bitmap.createBitmap(w,h,Bitmap.Config.ARGB_8888);
+                        android.graphics.Canvas paper=new android.graphics.Canvas(bitmap);
+                        paper.drawColor(android.graphics.Color.WHITE);
                         page.render(bitmap,null,null,PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
                     }
                 }
