@@ -12,7 +12,9 @@ public final class NetworkClientFactory {
     public static OkHttpClient create(Profile profile) throws Exception {
         ConnectionSpec secureTls = new ConnectionSpec.Builder(ConnectionSpec.RESTRICTED_TLS)
                 .tlsVersions(TlsVersion.TLS_1_3, TlsVersion.TLS_1_2).build();
-        OkHttpClient.Builder b = new OkHttpClient.Builder().connectionSpecs(Arrays.asList(secureTls));
+        OkHttpClient.Builder b = new OkHttpClient.Builder()
+                .connectionSpecs(Arrays.asList(secureTls))
+                .authenticator(new DigestAuthenticator(profile));
         String pin = profile.certificatePin == null ? "" : profile.certificatePin.trim();
         if (!pin.isEmpty()) {
             String normalized = pin.startsWith("sha256/") ? pin : "sha256/" + pin;
