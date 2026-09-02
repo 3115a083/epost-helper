@@ -17,7 +17,6 @@ import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.Executors;
 
 public class EPostPrintService extends PrintService {
     private final Handler main = new Handler(Looper.getMainLooper());
@@ -59,7 +58,7 @@ public class EPostPrintService extends PrintService {
         if(pfd==null){printJob.fail("Druckdaten fehlen");return;}
         printJob.start();
 
-        Executors.newSingleThreadExecutor().execute(()->{
+        new Thread(()->{
             File tmp=null;
             try{
                 tmp=File.createTempFile("epost-print-",".pdf",getCacheDir());
@@ -72,7 +71,7 @@ public class EPostPrintService extends PrintService {
                 String message="E-POST-Versand fehlgeschlagen: "+e.getMessage();
                 main.post(()->printJob.fail(message));
             }finally{if(tmp!=null) tmp.delete();}
-        });
+        },"epost-print-job").start();
     }
 
     @Override protected void onRequestCancelPrintJob(PrintJob printJob){printJob.cancel();}
