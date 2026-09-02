@@ -27,7 +27,7 @@ public class ProfileEditActivity extends AppCompatActivity {
     private Profile profile;
     private EditText name,url,user,secret,pin,sshKey;
     private Spinner provider,type,registered;
-    private MaterialSwitch active,duplex,color;
+    private MaterialSwitch active,duplex,color,remoteAddressCorrection;
     private LinearLayout credentials;
     private TextView routeHelp;
 
@@ -37,6 +37,7 @@ public class ProfileEditActivity extends AppCompatActivity {
         SettingsStore.applyDynamicColors(this);
         String id=getIntent().getStringExtra("profileId");
         profile=id==null?new Profile():SecureStore.find(this,id);
+        if(id==null&&"Standard".equals(profile.name))profile.name="Deutsche Post";
         if(profile==null)profile=new Profile();
         render();
     }
@@ -106,7 +107,11 @@ public class ProfileEditActivity extends AppCompatActivity {
         registered.setAdapter(new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,new String[]{"Nein","Einschreiben Einwurf","Einschreiben","Einschreiben Rückschein"}));
         int ri=0;for(int i=0;i<registered.getCount();i++)if(registered.getItemAtPosition(i).toString().equals(profile.registeredMail))ri=i;registered.setSelection(ri);
         defaults.addView(registered,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,52)));
-        TextView addressHelp=UiKit.body(this,"Optional: Quellbereiche für Absender und Empfänger am eigenen Brieflayout speichern. Die automatische PDF-Transformation folgt in einem separaten Schritt.");
+        remoteAddressCorrection=new MaterialSwitch(this);
+        remoteAddressCorrection.setText("Adresskorrektur ist im Deutsche-Post-Ziel eingerichtet");
+        remoteAddressCorrection.setChecked(profile.addressCorrection);
+        defaults.addView(remoteAddressCorrection);
+        TextView addressHelp=UiKit.body(this,"Quellbereiche für Absender und Empfänger am eigenen Brieflayout speichern. Bei LetterXpress kann die App diese Bereiche vor dem Versand lokal neu positionieren. Bei Deutsche Post verhindert die Kennzeichnung eine doppelte Korrektur, wenn der Sammelkorb bereits selbst korrigiert.");
         addressHelp.setTextSize(13);addressHelp.setPadding(0,UiKit.dp(this,8),0,UiKit.dp(this,8));defaults.addView(addressHelp);
         MaterialButton helper=UiKit.tonal(this,"Adressbereiche konfigurieren");
         helper.setOnClickListener(v->{collect();saveQuiet();Intent i=new Intent(this,AddressConfigActivity.class);i.putExtra("profileId",profile.id);startActivity(i);});
@@ -134,6 +139,9 @@ public class ProfileEditActivity extends AppCompatActivity {
 
     private void updateProviderUi(ImageView logo){
         boolean lxp=provider.getSelectedItemPosition()==1;
+        String currentName=text(name);
+        if(!getIntent().hasExtra("profileId")&&("Deutsche Post".equals(currentName)||"LetterXpress".equals(currentName)||"Standard".equals(currentName)))
+            name.setText(lxp?"LetterXpress":"Deutsche Post");
         logo.setImageResource(lxp?R.drawable.ic_provider_lxp:R.drawable.ic_provider_post);
         String current=type.getSelectedItem()==null?profile.type:String.valueOf(type.getSelectedItem());
         String[] types=lxp?new String[]{"LetterXpress API","LetterXpress SFTP"}:new String[]{"Sammelkorb / WebDAV","Netzwerkdrucker / IPP"};
@@ -151,6 +159,7 @@ public class ProfileEditActivity extends AppCompatActivity {
         user.setHint(api?"LetterXpress Benutzername":sftp?"SFTP Benutzername":ipp?"Optionaler IPP-Benutzername":"WebDAV Benutzername");
         secret.setHint(api?"LetterXpress API-Key":sftp?"SFTP Passwort":"WebDAV Passwort");
         secret.setVisibility(ipp?View.GONE:View.VISIBLE);
+        remoteAddressCorrection.setVisibility(lxp?View.GONE:View.VISIBLE);
         pin.setVisibility(sftp?View.GONE:View.VISIBLE);
         sshKey.setVisibility(sftp?View.VISIBLE:View.GONE);
         routeHelp.setText(api?"REST API v3. Unterstützt Preisabfrage und Testmodus."
@@ -173,7 +182,7 @@ public class ProfileEditActivity extends AppCompatActivity {
         else{profile.password=text(secret);}
         profile.certificatePin=text(pin);profile.sshHostKey=text(sshKey);
         profile.duplex=duplex.isChecked();profile.color=color.isChecked();profile.registeredMail=String.valueOf(registered.getSelectedItem());
-
+        profile.addressCorrection=!lxp&&remoteAddressCorrection!=null&&remoteAddressCorrection.isChecked();
     }
 
     private void persist() throws Exception{
