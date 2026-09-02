@@ -48,6 +48,7 @@ public class OutboxActivity extends AppCompatActivity {
     @Override protected void onCreate(Bundle b){
         SettingsStore.applySavedAppearance(this);
         super.onCreate(b);
+        SettingsStore.applyDynamicColors(this);
         renderShell();
     }
 
