@@ -1,6 +1,7 @@
 package de.eposthelper.app;
 
 import android.os.Bundle;
+import android.content.Intent;
 import android.text.InputType;
 import android.view.Gravity;
 import android.view.ViewGroup;
@@ -144,7 +145,15 @@ public class ProfileEditActivity extends AppCompatActivity {
         LinearLayout address=new LinearLayout(this); address.setOrientation(LinearLayout.VERTICAL);
         TextView addressText=UiKit.body(this,"E-POST MAILER korrigiert Empfänger- und Absenderbereiche über seine Adresswerkzeuge und gespeicherte Vorlagen. Die App verändert deshalb keine PDF-Koordinaten und erzeugt keine eigene, inkompatible Adressverschiebung.");
         addressText.setTextSize(13); address.addView(addressText);
-        root.addView(section("Adressfenster","Keine manuellen X/Y-Offsets mehr.",address));
+        MaterialButton addressHelper=UiKit.tonal(this,"Versandfeld-Assistent öffnen");
+        addressHelper.setOnClickListener(v->{
+            collect();
+            Intent i=new Intent(this,AddressConfigActivity.class);
+            if(getIntent().hasExtra("profileId")) i.putExtra("profileId",profile.id);
+            startActivity(i);
+        });
+        address.addView(addressHelper,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,52)));
+        root.addView(section("Adressfenster","Visuelle Korrekturvorlage nach dem E-POST-Ablauf.",address));
 
         MaterialButton test=UiKit.tonal(this,"Verbindung prüfen");
         test.setOnClickListener(v->testConnection(test));
@@ -192,6 +201,10 @@ public class ProfileEditActivity extends AppCompatActivity {
         Executors.newSingleThreadExecutor().execute(()->{
             try{
                 String result=ConnectionTester.test(profile);
+                profile.connectionVerified=true;
+                profile.connectionVerifiedAt=System.currentTimeMillis();
+                profile.lastConnectionMessage=result;
+                persistProfile();
                 runOnUiThread(()->{
                     anchor.setEnabled(true); anchor.setText("Verbindung prüfen");
                     TextView tv=UiKit.mono(this,result); tv.setPadding(UiKit.dp(this,6),UiKit.dp(this,6),UiKit.dp(this,6),UiKit.dp(this,6));
@@ -200,22 +213,30 @@ public class ProfileEditActivity extends AppCompatActivity {
             }catch(Exception e){
                 runOnUiThread(()->{
                     anchor.setEnabled(true); anchor.setText("Verbindung prüfen");
-                    Snackbar.make(anchor,"Prüfung fehlgeschlagen: "+(e.getMessage()==null?"Unbekannter Fehler":e.getMessage()),Snackbar.LENGTH_LONG).show();
+                    profile.connectionVerified=false;
+                    profile.connectionVerifiedAt=System.currentTimeMillis();
+                    profile.lastConnectionMessage=e.getMessage()==null?"Unbekannter Fehler":e.getMessage();
+                    try{persistProfile();}catch(Exception ignored){}
+                    Snackbar.make(anchor,"Prüfung fehlgeschlagen: "+profile.lastConnectionMessage,Snackbar.LENGTH_LONG).show();
                 });
             }
         });
     }
 
+    private void persistProfile() throws Exception{
+        List<Profile> list=new ArrayList<>(SecureStore.load(this));
+        boolean replaced=false;
+        for(int i=0;i<list.size();i++){
+            if(list.get(i).id.equals(profile.id)){list.set(i,profile);replaced=true;break;}
+        }
+        if(!replaced) list.add(profile);
+        SecureStore.save(this,list);
+    }
+
     private void save(MaterialButton anchor){
         if(!validate())return;
         try{
-            List<Profile> list=new ArrayList<>(SecureStore.load(this));
-            boolean replaced=false;
-            for(int i=0;i<list.size();i++){
-                if(list.get(i).id.equals(profile.id)){list.set(i,profile);replaced=true;break;}
-            }
-            if(!replaced) list.add(profile);
-            SecureStore.save(this,list); finish();
+            persistProfile(); finish();
         }catch(Exception e){
             Snackbar.make(anchor,e.getMessage()==null?"Profil konnte nicht gespeichert werden.":e.getMessage(),Snackbar.LENGTH_LONG).show();
         }
