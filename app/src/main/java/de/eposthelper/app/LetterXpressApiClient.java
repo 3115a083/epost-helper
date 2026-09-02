@@ -153,6 +153,41 @@ public final class LetterXpressApiClient {
         return data.optDouble("price",-1);
     }
 
+    public static java.util.List<RecentLetter> recentJobs(Profile p,int limit) throws Exception{
+        JSONObject root=new JSONObject();root.put("auth",auth(p,"live"));
+        JSONObject out=getWithJsonBody("/printjobs",root);
+        java.util.ArrayList<RecentLetter> result=new java.util.ArrayList<>();
+        JSONObject data=out.optJSONObject("data");
+        org.json.JSONArray jobs=data==null?null:data.optJSONArray("printjobs");
+        if(jobs==null)return result;
+        for(int i=0;i<jobs.length()&&result.size()<limit;i++){
+            JSONObject job=jobs.optJSONObject(i);if(job==null)continue;
+            org.json.JSONArray items=job.optJSONArray("items");
+            if(items==null||items.length()==0){
+                RecentLetter x=new RecentLetter();
+                x.id=job.optString("id");
+                x.filename=job.optString("filename_original","");
+                x.status=job.optString("status","");
+                x.createdAt=job.optString("created_at","");
+                result.add(x);
+                continue;
+            }
+            for(int j=0;j<items.length()&&result.size()<limit;j++){
+                JSONObject item=items.optJSONObject(j);if(item==null)continue;
+                RecentLetter x=new RecentLetter();
+                x.id=job.optString("id");
+                x.filename=job.optString("filename_original","");
+                x.status=item.optString("status",job.optString("status",""));
+                x.address=item.optString("address","");
+                x.createdAt=job.optString("created_at","");
+                x.amount=item.optDouble("amount",0);
+                x.vat=item.optDouble("vat",0);
+                result.add(x);
+            }
+        }
+        return result;
+    }
+
     private static final class NullOutput extends java.io.OutputStream{
         @Override public void write(int b){}
         @Override public void write(byte[] b,int off,int len){}
