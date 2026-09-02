@@ -32,7 +32,10 @@ public final class ConnectionTester {
                 .method("PROPFIND",RequestBody.create(new byte[0],MediaType.get("application/xml")))
                 .header("Depth","0").build();
         try(Response r=client.newCall(probe).execute()){
-            if(!(r.code()==207||r.isSuccessful())) throw new IllegalStateException("WebDAV antwortet mit HTTP "+r.code());
+            if(!(r.code()==207||r.isSuccessful())) {
+                if(r.code()==401) throw new IllegalStateException(authError("WebDAV",r));
+                throw new IllegalStateException("WebDAV antwortet mit HTTP "+r.code());
+            }
         }
         String info=readOptional(client,base+"Info.txt",p);
         String readme=readOptional(client,base+"README.txt",p);
@@ -56,13 +59,24 @@ public final class ConnectionTester {
         Request req=auth(new Request.Builder().url(url),p)
                 .post(RequestBody.create(request,IPP)).header("Content-Type","application/ipp").build();
         try(Response r=client.newCall(req).execute()){
-            if(!r.isSuccessful()) throw new IllegalStateException("IPP-Ziel antwortet mit HTTP "+r.code());
+            if(!r.isSuccessful()) {
+                if(r.code()==401) throw new IllegalStateException(authError("IPP",r));
+                throw new IllegalStateException("IPP-Ziel antwortet mit HTTP "+r.code());
+            }
             byte[] body=r.body()==null?new byte[0]:r.body().bytes();
             if(body.length<4) throw new IllegalStateException("Ungültige IPP-Antwort");
             int status=((body[2]&0xff)<<8)|(body[3]&0xff);
             if(status>=0x0400) throw new IllegalStateException("IPP-Fehler 0x"+Integer.toHexString(status));
         }
         return "Netzwerkdrucker erreichbar\nIPP-Verbindung und Authentifizierung wurden erfolgreich geprüft.";
+    }
+
+    private static String authError(String kind,Response r){
+        String challenge=r.header("WWW-Authenticate","");
+        String hint=kind+" meldet HTTP 401. ";
+        if(!challenge.isBlank()) hint+="Server-Challenge: "+challenge+". ";
+        hint+="Prüfe Benutzername und Passwort. Beim E-POST Netzwerkdrucker nennt das Handbuch z. B. Benutzername@Firmen-ID.";
+        return hint;
     }
 
     private static String trim(String s){
