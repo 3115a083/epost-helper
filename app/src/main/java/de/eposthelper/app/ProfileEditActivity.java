@@ -27,7 +27,7 @@ public class ProfileEditActivity extends AppCompatActivity {
     private Profile profile;
     private EditText name,url,user,secret,pin,sshKey;
     private Spinner provider,type,registered;
-    private MaterialSwitch active,duplex,color,addressCorrection;
+    private MaterialSwitch active,duplex,color;
     private LinearLayout credentials;
     private TextView routeHelp;
 
@@ -105,7 +105,8 @@ public class ProfileEditActivity extends AppCompatActivity {
         registered.setAdapter(new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,new String[]{"Nein","Einschreiben Einwurf","Einschreiben","Einschreiben Rückschein"}));
         int ri=0;for(int i=0;i<registered.getCount();i++)if(registered.getItemAtPosition(i).toString().equals(profile.registeredMail))ri=i;registered.setSelection(ri);
         defaults.addView(registered,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,52)));
-        addressCorrection=new MaterialSwitch(this);addressCorrection.setText("Adresskorrektur verwenden");addressCorrection.setChecked(profile.addressCorrection);defaults.addView(addressCorrection);
+        TextView addressHelp=UiKit.body(this,"Optional: Quellbereiche für Absender und Empfänger am eigenen Brieflayout speichern. Die automatische PDF-Transformation folgt in einem separaten Schritt.");
+        addressHelp.setTextSize(13);addressHelp.setPadding(0,UiKit.dp(this,8),0,UiKit.dp(this,8));defaults.addView(addressHelp);
         MaterialButton helper=UiKit.tonal(this,"Adressbereiche konfigurieren");
         helper.setOnClickListener(v->{collect();saveQuiet();Intent i=new Intent(this,AddressConfigActivity.class);i.putExtra("profileId",profile.id);startActivity(i);});
         defaults.addView(helper,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,52)));
@@ -171,7 +172,7 @@ public class ProfileEditActivity extends AppCompatActivity {
         else{profile.password=text(secret);}
         profile.certificatePin=text(pin);profile.sshHostKey=text(sshKey);
         profile.duplex=duplex.isChecked();profile.color=color.isChecked();profile.registeredMail=String.valueOf(registered.getSelectedItem());
-        profile.addressCorrection=addressCorrection.isChecked();
+
     }
 
     private void persist() throws Exception{
