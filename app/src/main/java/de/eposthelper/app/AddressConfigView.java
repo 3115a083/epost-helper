@@ -21,6 +21,9 @@ public final class AddressConfigView extends View {
     private final RectF recipient=new RectF(0.105f,0.115f,0.535f,0.235f);
 
     private RectF active;
+    private final RectF reserved=new RectF();
+    private boolean showReserved=false;
+    private String reservedLabel="Reservierter Bereich";
     private boolean resizing=false;
     private boolean snapEnabled=true;
     private float downX,downY;
@@ -56,6 +59,17 @@ public final class AddressConfigView extends View {
     }
 
     public boolean isSnapEnabled(){ return snapEnabled; }
+
+    public void setReservedArea(RectF area,String label){
+        if(area==null||area.isEmpty()){reserved.setEmpty();showReserved=false;}
+        else{reserved.set(area);showReserved=true;}
+        reservedLabel=label==null?"Reservierter Bereich":label;
+        invalidate();
+    }
+
+    public boolean hasCollision(){
+        return showReserved&&(RectF.intersects(sender,reserved)||RectF.intersects(recipient,reserved));
+    }
 
     public void setBoxes(RectF senderBox,RectF recipientBox){
         if(senderBox!=null&&!senderBox.isEmpty()) sender.set(senderBox);
@@ -106,6 +120,15 @@ public final class AddressConfigView extends View {
             paint.setColor(0x335B5BD6);
             paint.setStrokeWidth(UiKit.dp(getContext(),1));
             canvas.drawLine(sx,imageRect.top,sx,imageRect.bottom,paint);
+        }
+
+        if(showReserved){
+            RectF rp=toPixels(reserved);
+            boolean collision=RectF.intersects(sender,reserved)||RectF.intersects(recipient,reserved);
+            int rc=collision?0xFFD32F2F:0xFFB26A00;
+            paint.setStyle(Paint.Style.FILL);paint.setColor((rc&0x00FFFFFF)|0x33000000);canvas.drawRect(rp,paint);
+            paint.setStyle(Paint.Style.STROKE);paint.setStrokeWidth(UiKit.dp(getContext(),2));paint.setColor(rc);canvas.drawRect(rp,paint);
+            paint.setStyle(Paint.Style.FILL);paint.setTextSize(UiKit.dp(getContext(),11));canvas.drawText(reservedLabel,rp.left+UiKit.dp(getContext(),5),rp.top+UiKit.dp(getContext(),14),paint);
         }
 
         drawBox(canvas,sender,"Absender",0xFF287A61);
