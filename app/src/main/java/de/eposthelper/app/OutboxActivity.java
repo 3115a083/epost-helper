@@ -50,6 +50,7 @@ public class OutboxActivity extends AppCompatActivity {
     private ImageView orderPreviewImage;
     private TextView orderPreviewTitle;
     private TextView orderPreviewMeta;
+    private Bitmap orderPreviewBitmap;
 
     private String selectedProfileId;
     private MaterialSwitch color,duplex,localCorrection,c4;
@@ -310,6 +311,10 @@ public class OutboxActivity extends AppCompatActivity {
         int pages=PdfMergeUtil.countPages(this,item.asUri());
         orderPreviewMeta.setText((index+1)+" / "+working.size()+" · "+pages+" Seite"+(pages==1?"":"n"));
         orderPreviewImage.setImageDrawable(null);
+        if(orderPreviewBitmap!=null&&!orderPreviewBitmap.isRecycled()){
+            orderPreviewBitmap.recycle();
+            orderPreviewBitmap=null;
+        }
 
         new Thread(()->{
             try{
@@ -319,6 +324,7 @@ public class OutboxActivity extends AppCompatActivity {
                         if(!bitmap.isRecycled())bitmap.recycle();
                         return;
                     }
+                    orderPreviewBitmap=bitmap;
                     orderPreviewImage.setImageBitmap(bitmap);
                 });
             }catch(Exception e){
@@ -379,7 +385,6 @@ public class OutboxActivity extends AppCompatActivity {
                 int to=working.indexOf(item);
                 if(from<0||from>=working.size()||to<0||to>=working.size()||from==to)return true;
                 OutboxItem moved=working.remove(from);
-                if(from<to)to--;
                 working.add(Math.max(0,Math.min(to,working.size())),moved);
                 previewIndex=working.indexOf(moved);
                 renderStep();
@@ -404,6 +409,7 @@ public class OutboxActivity extends AppCompatActivity {
                 runOnUiThread(()->{
                     if(merged!=null&&merged.exists())merged.delete();
                     if(previewBitmap!=null&&!previewBitmap.isRecycled())previewBitmap.recycle();
+        if(orderPreviewBitmap!=null&&!orderPreviewBitmap.isRecycled())orderPreviewBitmap.recycle();
                     merged=next;previewBitmap=bitmap;
                     if(advance){step=3;renderStep();}
                     else if(step==2)renderStep();
@@ -625,7 +631,9 @@ public class OutboxActivity extends AppCompatActivity {
         }
 
         RectF reserved=DebugProfileManager.isDebug(p)?new RectF():AddressLayoutRules.reserved(p,o);
+        RectF safety=DebugProfileManager.isDebug(p)?new RectF():AddressLayoutRules.recipientSafety(p,o);
         addressPreview.setReservedArea(reserved,reserved.isEmpty()?null:"Reserviert für Frankierung");
+        addressPreview.setRecipientSafetyArea(safety,safety.isEmpty()?null:"Adress-Sicherheitsreserve");
 
         if(Profile.PROVIDER_POST.equals(p.provider)&&p.addressCorrection&&correctionRequested){
             layoutHint.setText("Lokale Adresskorrektur ist eingeschaltet. Dieses Deutsche-Post-Profil ist zusätzlich als serverseitig korrigiert markiert. Prüfe in der großen Vorschau, ob dadurch eine Doppelkorrektur entstehen kann.");
