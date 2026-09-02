@@ -44,6 +44,8 @@ public final class Profile {
         p.duplex = o.optBoolean("duplex", false);
         p.color = o.optBoolean("color", false);
         p.registeredMail = o.optString("registeredMail", "Nein");
+        if ("Einwurf".equals(p.registeredMail)) p.registeredMail = "Einschreiben Einwurf";
+        if ("Rückschein".equals(p.registeredMail)) p.registeredMail = "Einschreiben Rückschein";
         p.recipientWindow = o.optString("recipientWindow", "");
         p.senderWindow = o.optString("senderWindow", "");
         return p;
