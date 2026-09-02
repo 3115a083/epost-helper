@@ -10,6 +10,7 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.EPostHelper">
         <activity android:name=".ProfileEditActivity" android:exported="false" />
+        <activity android:name=".AddressConfigActivity" android:exported="false" />
         <activity android:name=".MainActivity" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
