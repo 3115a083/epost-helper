@@ -74,13 +74,19 @@ public final class UiKit {
 
     public static MaterialButton primary(Context c,String text){
         MaterialButton b=new MaterialButton(c); b.setText(text); b.setTextSize(14);
-        b.setCornerRadius(dp(c,24)); b.setMinHeight(dp(c,52)); return b;
+        b.setCornerRadius(dp(c,24)); b.setMinHeight(dp(c,52));
+        b.setBackgroundTintList(android.content.res.ColorStateList.valueOf(SettingsStore.primary(c)));
+        b.setTextColor(Color.WHITE);
+        return b;
     }
 
     public static MaterialButton tonal(Context c,String text){
-        MaterialButton b=primary(c,text);
-        b.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xFFE9EEFF));
-        b.setTextColor(0xFF2457E6); return b;
+        MaterialButton b=new MaterialButton(c); b.setText(text); b.setTextSize(14);
+        b.setCornerRadius(dp(c,24)); b.setMinHeight(dp(c,52));
+        int p=SettingsStore.primary(c);
+        int soft=androidx.core.graphics.ColorUtils.blendARGB(resolveSurface(c),p,0.12f);
+        b.setBackgroundTintList(android.content.res.ColorStateList.valueOf(soft));
+        b.setTextColor(p); return b;
     }
 
     public static int resolveSurface(Context c){
