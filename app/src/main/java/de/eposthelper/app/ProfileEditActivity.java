@@ -5,6 +5,7 @@ import android.content.Intent;
 import android.text.InputType;
 import android.view.Gravity;
 import android.view.ViewGroup;
+import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.EditText;
 import android.widget.LinearLayout;
@@ -107,9 +108,19 @@ public class ProfileEditActivity extends AppCompatActivity {
 
         LinearLayout credentials=new LinearLayout(this); credentials.setOrientation(LinearLayout.VERTICAL);
         user=field("Benutzername",profile.username,false); addField(credentials,user);
-        pass=field("Passwort",profile.password,true); addField(credentials,pass);
+        pass=field("WebDAV-Passwort",profile.password,true); addField(credentials,pass);
         pin=field("Optionaler SPKI-Pin, sha256/…",profile.certificatePin,false); addField(credentials,pin);
-        TextView pinHelp=UiKit.body(this,"Die App akzeptiert nur HTTPS/IPPS. Ein Zertifikatsfehler kann nicht umgangen werden. Pinning verschärft die Prüfung zusätzlich.");
+        Runnable updateAuthFields=()->{
+            boolean ipp=type.getSelectedItemPosition()==1;
+            pass.setVisibility(ipp?android.view.View.GONE:android.view.View.VISIBLE);
+            user.setHint(ipp?"Optionaler IPP-Benutzername":"WebDAV-Benutzername");
+        };
+        type.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener(){
+            @Override public void onItemSelected(AdapterView<?> parent,android.view.View view,int position,long id){ updateAuthFields.run(); }
+            @Override public void onNothingSelected(AdapterView<?> parent){}
+        });
+        updateAuthFields.run();
+        TextView pinHelp=UiKit.body(this,"WebDAV nutzt Basic-Authentifizierung mit Benutzername und Passwort. Der Netzwerkdrucker wird über seine bereitgestellte URL angesprochen; ein optionaler Benutzername wird nur im IPP-Druckjob mitgesendet. TLS und Zertifikatsprüfung bleiben immer aktiv.");
         pinHelp.setTextSize(12); credentials.addView(pinHelp);
         root.addView(section("Zugang & Sicherheit","Zugangsdaten werden verschlüsselt im Android Keystore gespeichert.",credentials));
 
@@ -168,7 +179,9 @@ public class ProfileEditActivity extends AppCompatActivity {
     private void collect(){
         profile.name=text(name);
         profile.type=type.getSelectedItemPosition()==1?Profile.TYPE_IPP:Profile.TYPE_WEBDAV;
-        profile.url=text(url); profile.username=text(user); profile.password=text(pass); profile.certificatePin=text(pin);
+        profile.url=text(url); profile.username=text(user);
+        profile.password=Profile.TYPE_IPP.equals(profile.type)?"":text(pass);
+        profile.certificatePin=text(pin);
         profile.active=active.isChecked(); profile.duplex=duplex.isChecked(); profile.color=color.isChecked();
         profile.registeredMail=String.valueOf(registered.getSelectedItem());
         
