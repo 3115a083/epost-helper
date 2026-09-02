@@ -31,6 +31,7 @@ public class EPostPrintService extends PrintService {
             @Override public void onDestroy(){}
 
             private void publish(){
+                DebugProfileManager.ensure(EPostPrintService.this);
                 List<PrinterInfo> infos=new ArrayList<>();
                 for(Profile p:SecureStore.load(EPostPrintService.this)){
                     if(!p.active)continue;
@@ -44,14 +45,16 @@ public class EPostPrintService extends PrintService {
                             .setDuplexModes(PrintAttributes.DUPLEX_MODE_NONE|PrintAttributes.DUPLEX_MODE_LONG_EDGE,
                                     p.duplex?PrintAttributes.DUPLEX_MODE_LONG_EDGE:PrintAttributes.DUPLEX_MODE_NONE)
                             .build();
-                    String provider=Profile.PROVIDER_LETTERXPRESS.equals(p.provider)?"LetterXpress":"Deutsche Post";
-                    String route=Profile.TYPE_LXP_API.equals(p.type)?"API":
+                    String provider=DebugProfileManager.isDebug(p)?"Debug":Profile.PROVIDER_LETTERXPRESS.equals(p.provider)?"LetterXpress":"Deutsche Post";
+                    String route=Profile.TYPE_DEBUG.equals(p.type)?"Lokale Testausgabe":
+                            Profile.TYPE_LXP_API.equals(p.type)?"API":
                             Profile.TYPE_LXP_SFTP.equals(p.type)?"SFTP":
                             Profile.TYPE_IPP.equals(p.type)?"IPP":"WebDAV";
                     PrinterInfo.Builder printer=new PrinterInfo.Builder(id,provider+" · "+p.name,PrinterInfo.STATUS_IDLE)
                             .setDescription(route+" · Erweiterte Versandoptionen verfügbar")
                             .setCapabilities(caps);
-                    printer.setIconResourceId(Profile.PROVIDER_LETTERXPRESS.equals(p.provider)?R.drawable.ic_provider_lxp:R.drawable.ic_provider_post);
+                    printer.setIconResourceId(DebugProfileManager.isDebug(p)?R.drawable.ic_provider_debug:
+                            Profile.PROVIDER_LETTERXPRESS.equals(p.provider)?R.drawable.ic_provider_lxp:R.drawable.ic_provider_post);
                     infos.add(printer.build());
                 }
                 addPrinters(infos);
