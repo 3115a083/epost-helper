@@ -18,6 +18,7 @@ import android.widget.ScrollView;
 import android.widget.Spinner;
 import android.widget.TextView;
 
+import androidx.activity.OnBackPressedCallback;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
@@ -27,6 +28,7 @@ import com.google.android.material.button.MaterialButton;
 import com.google.android.material.card.MaterialCardView;
 import com.google.android.material.snackbar.Snackbar;
 
+import java.util.ArrayDeque;
 import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
@@ -35,13 +37,15 @@ public class MainActivity extends AppCompatActivity {
     private Uri selectedPdf;
     private String selectedProfileId;
     private int currentTab=0;
+    private final ArrayDeque<Integer> tabHistory=new ArrayDeque<>();
+    private long lastBackAt=0L;
 
     private final ActivityResultLauncher<String[]> picker=registerForActivityResult(
             new ActivityResultContracts.OpenDocument(),uri->{
                 if(uri!=null){
                     try{getContentResolver().takePersistableUriPermission(uri,Intent.FLAG_GRANT_READ_URI_PERMISSION);}
                     catch(SecurityException ignored){}
-                    selectedPdf=uri; currentTab=1; render();
+                    selectedPdf=uri; navigateTo(1);
                 }
             });
 
@@ -51,12 +55,45 @@ public class MainActivity extends AppCompatActivity {
         if(Intent.ACTION_VIEW.equals(getIntent().getAction())&&getIntent().getData()!=null){
             selectedPdf=getIntent().getData(); currentTab=1;
         }
-        buildShell(); render();
+        buildShell();
+        setupBackNavigation();
+        render();
     }
 
     @Override protected void onResume(){
         super.onResume();
         if(content!=null) render();
+    }
+
+    private void navigateTo(int tab){
+        if(tab==currentTab)return;
+        tabHistory.push(currentTab);
+        currentTab=tab;
+        render();
+    }
+
+    private void setupBackNavigation(){
+        getOnBackPressedDispatcher().addCallback(this,new OnBackPressedCallback(true){
+            @Override public void handleOnBackPressed(){
+                if(!tabHistory.isEmpty()){
+                    currentTab=tabHistory.pop();
+                    render();
+                    return;
+                }
+                if(currentTab!=0){
+                    currentTab=0;
+                    render();
+                    return;
+                }
+                long now=System.currentTimeMillis();
+                if(now-lastBackAt<2000){
+                    finish();
+                }else{
+                    lastBackAt=now;
+                    Snackbar.make(content,"Zum Beenden erneut Zurück drücken",Snackbar.LENGTH_SHORT).show();
+                }
+            }
+        });
     }
 
     private void buildShell(){
@@ -90,7 +127,7 @@ public class MainActivity extends AppCompatActivity {
             TextView label=new TextView(this); label.setText(labels[i]); label.setTextSize(11); label.setGravity(Gravity.CENTER);
             item.addView(icon,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,27)));
             item.addView(label,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,19)));
-            item.setTag(new View[]{icon,label}); item.setOnClickListener(v->{currentTab=tab;render();});
+            item.setTag(new View[]{icon,label}); item.setOnClickListener(v->navigateTo(tab));
             nav.addView(item,new LinearLayout.LayoutParams(0,UiKit.dp(this,56),1f));
         }
         page.addView(nav);
@@ -139,7 +176,7 @@ public class MainActivity extends AppCompatActivity {
         b.setGravity(Gravity.CENTER); b.setPadding(0,UiKit.dp(this,6),0,UiKit.dp(this,12)); hero.addView(b);
         MaterialButton security=UiKit.primary(this,"Sicherheitsdetails");
         security.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0x33FFFFFF));
-        security.setOnClickListener(v->{currentTab=3;render();}); hero.addView(security);
+        security.setOnClickListener(v->navigateTo(3)); hero.addView(security);
         content.addView(UiKit.hero(this,hero,grad[0],grad[1]));
 
         LinearLayout metrics=new LinearLayout(this); metrics.setOrientation(LinearLayout.HORIZONTAL);
@@ -149,8 +186,8 @@ public class MainActivity extends AppCompatActivity {
         content.addView(metrics);
 
         content.addView(section("Schnellzugriff"));
-        content.addView(actionCard("▣","PDF senden","Dokument auswählen, Profil wählen und einliefern",()->{currentTab=1;render();}));
-        content.addView(actionCard("▤","Profile verwalten","Sammelkorb oder Netzwerkdrucker einrichten",()->{currentTab=2;render();}));
+        content.addView(actionCard("▣","PDF senden","Dokument auswählen, Profil wählen und einliefern",()->navigateTo(1)));
+        content.addView(actionCard("▤","Profile verwalten","Sammelkorb oder Netzwerkdrucker einrichten",()->navigateTo(2)));
         MaterialButton add=UiKit.primary(this,"+  Neues Profil"); add.setOnClickListener(v->startActivity(new Intent(this,ProfileEditActivity.class)));
         LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,54)); lp.setMargins(0,UiKit.dp(this,12),0,0); content.addView(add,lp);
     }
