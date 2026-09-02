@@ -31,8 +31,8 @@ public class AddressConfigActivity extends AppCompatActivity {
     private TextView values;
     private Uri pdfUri;
 
-    private RectF senderBox=new RectF(0.105f,0.055f,0.535f,0.105f);
-    private RectF recipientBox=new RectF(0.105f,0.115f,0.535f,0.235f);
+    private RectF senderBox=AddressLayoutRules.normalSender();
+    private RectF recipientBox=AddressLayoutRules.normalRecipient();
 
     private final ActivityResultLauncher<String[]> picker=registerForActivityResult(
             new ActivityResultContracts.OpenDocument(),uri->{
