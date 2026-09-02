@@ -71,7 +71,8 @@ public class MainActivity extends AppCompatActivity {
         brand.addView(UiKit.heading(this,"E-POST Helper",24));
         TextView sub=UiKit.body(this,"Sicherer Hybridbriefversand"); sub.setTextSize(13); brand.addView(sub);
         top.addView(brand,new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1f));
-        MaterialButton settingsButton=UiKit.tonal(this,"");\n        settingsButton.setIconResource(de.eposthelper.app.R.drawable.ic_settings);
+        MaterialButton settingsButton=UiKit.tonal(this,"");
+        settingsButton.setIconResource(de.eposthelper.app.R.drawable.ic_settings);
         settingsButton.setContentDescription("Einstellungen öffnen");
         settingsButton.setMinWidth(UiKit.dp(this,50)); settingsButton.setOnClickListener(v->{currentTab=3;render();});
         top.addView(settingsButton,new LinearLayout.LayoutParams(UiKit.dp(this,54),UiKit.dp(this,48)));
@@ -131,13 +132,16 @@ public class MainActivity extends AppCompatActivity {
 
     private void renderHome(){
         List<Profile> profiles=SecureStore.load(this);
-        long active=profiles.stream().filter(p->p.active).count();\n        long connected=profiles.stream().filter(p->p.active&&p.connectionVerified).count();
+        long active=profiles.stream().filter(p->p.active).count();
+        long connected=profiles.stream().filter(p->p.active&&p.connectionVerified).count();
         int[] grad=SettingsStore.gradient(this);
 
         LinearLayout hero=new LinearLayout(this); hero.setOrientation(LinearLayout.VERTICAL); hero.setGravity(Gravity.CENTER_HORIZONTAL);
         TextView shield=UiKit.heroTitle(this,"◇",42); shield.setGravity(Gravity.CENTER); hero.addView(shield);
-        String heroTitle=connected>0?"Verbindung bereit":(active>0?"Profile noch nicht geprüft":"Noch nicht eingerichtet");\n        TextView h=UiKit.heroTitle(this,heroTitle,24); h.setGravity(Gravity.CENTER); hero.addView(h);
-        String heroText=connected>0?connected+" verifiziertes E-POST-Ziel":(active>0?"Prüfe die E-POST-Verbindung in den Profilen":"Lege zuerst ein Versandprofil an");\n        TextView b=UiKit.heroBody(this,heroText+" · TLS geschützt");
+        String heroTitle=connected>0?"Verbindung bereit":(active>0?"Profile noch nicht geprüft":"Noch nicht eingerichtet");
+        TextView h=UiKit.heroTitle(this,heroTitle,24); h.setGravity(Gravity.CENTER); hero.addView(h);
+        String heroText=connected>0?connected+" verifiziertes E-POST-Ziel":(active>0?"Prüfe die E-POST-Verbindung in den Profilen":"Lege zuerst ein Versandprofil an");
+        TextView b=UiKit.heroBody(this,heroText+" · TLS geschützt");
         b.setGravity(Gravity.CENTER); b.setPadding(0,UiKit.dp(this,6),0,UiKit.dp(this,12)); hero.addView(b);
         MaterialButton security=UiKit.primary(this,"Sicherheitsdetails");
         security.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0x33FFFFFF));
@@ -234,7 +238,8 @@ public class MainActivity extends AppCompatActivity {
             LinearLayout box=new LinearLayout(this); box.setOrientation(LinearLayout.VERTICAL);
             LinearLayout head=new LinearLayout(this); head.setGravity(Gravity.CENTER_VERTICAL);
             head.addView(UiKit.heading(this,p.name,17),new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1f));
-            String status=!p.active?"Inaktiv":(p.connectionVerified?"Verbunden":"Nicht geprüft");\n            head.addView(UiKit.pill(this,status,p.connectionVerified)); box.addView(head);
+            String status=!p.active?"Inaktiv":(p.connectionVerified?"Verbunden":"Nicht geprüft");
+            head.addView(UiKit.pill(this,status,p.connectionVerified)); box.addView(head);
             TextView summary=UiKit.body(this,profileSummary(p)); summary.setPadding(0,UiKit.dp(this,7),0,UiKit.dp(this,5)); box.addView(summary);
             box.addView(UiKit.mono(this,redactUrl(p.url)));
             MaterialButton edit=UiKit.tonal(this,"Bearbeiten & prüfen"); edit.setOnClickListener(v->{Intent i=new Intent(this,ProfileEditActivity.class);i.putExtra("profileId",p.id);startActivity(i);});
