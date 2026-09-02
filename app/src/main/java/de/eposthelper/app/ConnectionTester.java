@@ -33,7 +33,7 @@ public final class ConnectionTester {
                 .header("Depth","0").build();
         try(Response r=client.newCall(probe).execute()){
             if(!(r.code()==207||r.isSuccessful())) {
-                if(r.code()==401) throw new IllegalStateException(describe401("WebDAV",r));
+                if(r.code()==401) throw auth401("WebDAV","PROPFIND",url,r);
                 throw new IllegalStateException("WebDAV antwortet mit HTTP "+r.code());
             }
         }
@@ -60,7 +60,7 @@ public final class ConnectionTester {
                 .post(RequestBody.create(request,IPP)).header("Content-Type","application/ipp").build();
         try(Response r=client.newCall(req).execute()){
             if(!r.isSuccessful()) {
-                if(r.code()==401) throw new IllegalStateException(describe401("IPP",r));
+                if(r.code()==401) throw auth401("IPP","POST",url,r);
                 throw new IllegalStateException("IPP-Ziel antwortet mit HTTP "+r.code());
             }
             byte[] body=r.body()==null?new byte[0]:r.body().bytes();
@@ -71,12 +71,17 @@ public final class ConnectionTester {
         return "Netzwerkdrucker erreichbar\nIPP-Verbindung und Authentifizierung wurden erfolgreich geprüft.";
     }
 
-    public static String describe401(String kind,Response r){
+    public static DiagnosticException auth401(String protocol,String method,String url,Response r){
         String challenge=r.header("WWW-Authenticate","");
-        String hint=kind+" meldet HTTP 401. ";
-        if(!challenge.isBlank()) hint+="Server-Challenge: "+challenge+". ";
-        hint+="Prüfe die vom aktuellen Geschäftskundenportal bereitgestellte Ziel-URL und die dafür vorgesehenen Zugangsdaten. Das alte Benutzername@Firmen-ID-Schema wird nicht vorausgesetzt.";
-        return hint;
+        String host=r.request().url().host();
+        String path=r.request().url().encodedPath();
+        String debug="protocol="+protocol+
+                "\nhttpStatus=401"+
+                "\nmethod="+method+
+                "\nhost="+host+
+                "\npath="+path+
+                "\nwwwAuthenticate="+(challenge.isBlank()?"<missing>":challenge);
+        return new DiagnosticException("Anmeldung abgelehnt (HTTP 401).",debug);
     }
 
     private static String trim(String s){
