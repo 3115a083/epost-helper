@@ -229,7 +229,10 @@ public class MainActivity extends AppCompatActivity {
         for(RecentLetter j:jobs){
             LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);
             LinearLayout head=new LinearLayout(this);head.setGravity(Gravity.CENTER_VERTICAL);
+            ImageView providerIcon=new ImageView(this);providerIcon.setImageResource(R.drawable.ic_provider_lxp);providerIcon.setContentDescription("LetterXpress");
+            head.addView(providerIcon,new LinearLayout.LayoutParams(UiKit.dp(this,30),UiKit.dp(this,30)));
             TextView title=UiKit.heading(this,j.filename==null||j.filename.isBlank()?"Auftrag #"+j.id:j.filename,15);
+            title.setPadding(UiKit.dp(this,8),0,0,0);
             head.addView(title,new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1f));
             head.addView(UiKit.pill(this,statusLabel(j.status),"sent".equalsIgnoreCase(j.status)||"done".equalsIgnoreCase(j.status)));
             box.addView(head);
