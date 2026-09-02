@@ -41,6 +41,8 @@ public class EPostPrintService extends PrintService {
                             .setMinMargins(PrintAttributes.Margins.NO_MARGINS)
                             .setColorModes(PrintAttributes.COLOR_MODE_MONOCHROME|PrintAttributes.COLOR_MODE_COLOR,
                                     p.color?PrintAttributes.COLOR_MODE_COLOR:PrintAttributes.COLOR_MODE_MONOCHROME)
+                            .setDuplexModes(PrintAttributes.DUPLEX_MODE_NONE|PrintAttributes.DUPLEX_MODE_LONG_EDGE,
+                                    p.duplex?PrintAttributes.DUPLEX_MODE_LONG_EDGE:PrintAttributes.DUPLEX_MODE_NONE)
                             .build();
                     String provider=Profile.PROVIDER_LETTERXPRESS.equals(p.provider)?"LetterXpress":"Deutsche Post";
                     String route=Profile.TYPE_LXP_API.equals(p.type)?"API":
@@ -63,10 +65,11 @@ public class EPostPrintService extends PrintService {
         if(pfd==null){printJob.fail("Druckdaten fehlen");return;}
 
         JobOptions options=JobOptions.fromProfile(profile);
-        if(printJob.hasAdvancedOption(AdvancedPrintOptionsActivity.OPT_DUPLEX))
-            options.duplex=printJob.getAdvancedIntOption(AdvancedPrintOptionsActivity.OPT_DUPLEX)==1;
-        if(printJob.hasAdvancedOption(AdvancedPrintOptionsActivity.OPT_COLOR))
-            options.color=printJob.getAdvancedIntOption(AdvancedPrintOptionsActivity.OPT_COLOR)==1;
+        PrintAttributes attrs=printJob.getInfo().getAttributes();
+        if(attrs!=null){
+            options.color=attrs.getColorMode()==PrintAttributes.COLOR_MODE_COLOR;
+            options.duplex=attrs.getDuplexMode()!=0&&attrs.getDuplexMode()!=PrintAttributes.DUPLEX_MODE_NONE;
+        }
         if(printJob.hasAdvancedOption(AdvancedPrintOptionsActivity.OPT_REGISTERED))
             options.registered=printJob.getAdvancedStringOption(AdvancedPrintOptionsActivity.OPT_REGISTERED);
         if(printJob.hasAdvancedOption(AdvancedPrintOptionsActivity.OPT_C4))
