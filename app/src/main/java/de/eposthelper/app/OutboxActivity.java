@@ -51,6 +51,7 @@ public class OutboxActivity extends AppCompatActivity {
     private TextView layoutHint;
     private RadioGroup profileGroup;
     private LinearLayout profilePriceBox;
+    private final List<RadioButton> profileButtons=new ArrayList<>();
 
     private RectF targetSender=AddressLayoutRules.normalSender();
     private RectF targetRecipient=AddressLayoutRules.normalRecipient();
@@ -331,6 +332,7 @@ public class OutboxActivity extends AppCompatActivity {
     private boolean compatible(Profile p,JobOptions o){
         if(!p.active)return false;
         if(Profile.PROVIDER_POST.equals(p.provider)){
+            if(o.c4)return false;
             if(p.color!=o.color||p.duplex!=o.duplex)return false;
             String pr=p.registeredMail==null?"Nein":p.registeredMail;
             if(!pr.equals(o.registered))return false;
@@ -344,9 +346,17 @@ public class OutboxActivity extends AppCompatActivity {
         if(profilePriceBox==null)return;
         JobOptions o=currentOptions();
         profilePriceBox.removeAllViews();
+        profileButtons.clear();
         profileGroup=new RadioGroup(this);
 
         List<Profile> profiles=SecureStore.load(this);
+        Profile selected=SecureStore.find(this,selectedProfileId);
+        if(selected==null||!compatible(selected,o)){
+            selectedProfileId=null;
+            for(Profile candidate:profiles){
+                if(compatible(candidate,o)){selectedProfileId=candidate.id;break;}
+            }
+        }
         int pages=merged==null?0:PdfMergeUtil.countPages(merged);
         boolean found=false;
         for(Profile p:profiles){
@@ -358,8 +368,8 @@ public class OutboxActivity extends AppCompatActivity {
             row.addView(logo,new LinearLayout.LayoutParams(UiKit.dp(this,40),UiKit.dp(this,40)));
             RadioButton rb=new RadioButton(this);rb.setId(View.generateViewId());rb.setTag(p.id);
             rb.setText(p.name);rb.setTextSize(16);
-            if(selectedProfileId==null)selectedProfileId=p.id;
             rb.setChecked(p.id.equals(selectedProfileId));
+            profileButtons.add(rb);
             row.addView(rb,new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1f));
             card.addView(row);
 
@@ -370,6 +380,7 @@ public class OutboxActivity extends AppCompatActivity {
 
             rb.setOnCheckedChangeListener((button,checked)->{
                 if(!checked)return;
+                for(RadioButton other:profileButtons)if(other!=button&&other.isChecked())other.setChecked(false);
                 selectedProfileId=String.valueOf(button.getTag());
                 applyLayoutForProfile(SecureStore.find(this,selectedProfileId),localCorrection.isChecked());
             });
