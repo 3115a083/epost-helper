@@ -252,39 +252,54 @@ public class MainActivity extends AppCompatActivity {
 
     private void renderSettings(){
         content.addView(section("Darstellung"));
-        LinearLayout appearance=new LinearLayout(this); appearance.setOrientation(LinearLayout.VERTICAL);
-        appearance.addView(UiKit.body(this,"Modus"));
-        RadioGroup modes=new RadioGroup(this);
-        String[][] modeData={{"System","system"},{"Hell","light"},{"Dunkel","dark"}};
-        String selected=SettingsStore.appearance(this);
-        for(String[] m:modeData){
-            RadioButton rb=new RadioButton(this); rb.setText(m[0]); rb.setTag(m[1]); rb.setId(View.generateViewId()); rb.setChecked(m[1].equals(selected)); modes.addView(rb);
+
+        LinearLayout modeBox=new LinearLayout(this); modeBox.setOrientation(LinearLayout.VERTICAL);
+        modeBox.addView(UiKit.heading(this,"Erscheinungsbild",17));
+        TextView mh=UiKit.body(this,"System, Hell oder Dunkel"); mh.setPadding(0,UiKit.dp(this,4),0,UiKit.dp(this,10)); modeBox.addView(mh);
+        com.google.android.material.button.MaterialButtonToggleGroup modes=new com.google.android.material.button.MaterialButtonToggleGroup(this);
+        modes.setSingleSelection(true); modes.setSelectionRequired(true);
+        String[][] md={{"System","system"},{"Hell","light"},{"Dunkel","dark"}};
+        for(String[] m:md){
+            MaterialButton bt=UiKit.tonal(this,m[0]); bt.setId(View.generateViewId()); bt.setTag(m[1]);
+            modes.addView(bt,new LinearLayout.LayoutParams(0,UiKit.dp(this,48),1f));
+            if(m[1].equals(SettingsStore.appearance(this)))modes.check(bt.getId());
         }
-        modes.setOnCheckedChangeListener((g,id)->{View v=g.findViewById(id);if(v!=null)SettingsStore.setAppearance(this,String.valueOf(v.getTag()));});
-        appearance.addView(modes);
-        appearance.addView(UiKit.body(this,"Farbpalette"));
-        Spinner palette=new Spinner(this);
-        String[] labels={"Ocean","Forest","Sunset","Aurora","Lavender","Graphite"};
-        String[] values={"ocean","forest","sunset","aurora","lavender","graphite"};
-        palette.setAdapter(new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,labels));
-        int pi=0; for(int i=0;i<values.length;i++)if(values[i].equals(SettingsStore.palette(this)))pi=i; palette.setSelection(pi);
-        palette.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){
-            public void onItemSelected(android.widget.AdapterView<?> p,View v,int pos,long id){
-                String next=values[pos]; if(!next.equals(SettingsStore.palette(MainActivity.this))){SettingsStore.setPalette(MainActivity.this,next);render();}
-            }
-            public void onNothingSelected(android.widget.AdapterView<?> p){}
+        modes.addOnButtonCheckedListener((g,id,checked)->{
+            if(checked){View v=g.findViewById(id);if(v!=null)SettingsStore.setAppearance(MainActivity.this,String.valueOf(v.getTag()));}
         });
-        appearance.addView(palette,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,52)));
-        content.addView(UiKit.surfaceCard(this,appearance));
+        modeBox.addView(modes);
+        content.addView(UiKit.surfaceCard(this,modeBox));
+
+        LinearLayout paletteBox=new LinearLayout(this); paletteBox.setOrientation(LinearLayout.VERTICAL);
+        paletteBox.addView(UiKit.heading(this,"Farbpalette",17));
+        TextView ph=UiKit.body(this,"Akzentfarben für Hero, Buttons und Navigation"); ph.setPadding(0,UiKit.dp(this,4),0,UiKit.dp(this,8)); paletteBox.addView(ph);
+        com.google.android.material.chip.ChipGroup chips=new com.google.android.material.chip.ChipGroup(this);
+        chips.setSingleSelection(true); chips.setSelectionRequired(true);
+        String[][] pd={{"Ocean","ocean"},{"Forest","forest"},{"Sunset","sunset"},{"Aurora","aurora"},{"Lavender","lavender"},{"Graphite","graphite"}};
+        for(String[] p:pd){
+            com.google.android.material.chip.Chip chip=new com.google.android.material.chip.Chip(this);
+            chip.setId(View.generateViewId()); chip.setText(p[0]); chip.setTag(p[1]); chip.setCheckable(true);
+            chip.setChecked(p[1].equals(SettingsStore.palette(this))); chip.setChipCornerRadius(UiKit.dp(this,18));
+            chip.setOnCheckedChangeListener((button,checked)->{
+                if(checked){
+                    String next=String.valueOf(button.getTag());
+                    if(!next.equals(SettingsStore.palette(MainActivity.this))){SettingsStore.setPalette(MainActivity.this,next);render();}
+                }
+            });
+            chips.addView(chip);
+        }
+        paletteBox.addView(chips);
+        content.addView(UiKit.surfaceCard(this,paletteBox));
 
         content.addView(section("E-POST"));
-        content.addView(actionCard("▤","Versandprofile","Sammelkorb- und IPP-Ziele bearbeiten und Verbindung prüfen",()->{currentTab=2;render();}));
+        content.addView(actionCard("▤","Versandprofile","Ziele bearbeiten, Zugang prüfen und Authentifizierung testen",()->{currentTab=2;render();}));
+        content.addView(actionCard("▣","Versandfeld-Assistent","Adresspositionierung mit Sichtfenster und Sperrflächen vorbereiten",()->startActivity(new Intent(this,AddressConfigActivity.class))));
         content.addView(actionCard("▣","Android-Druckdienst","E-POST Helper als Systemdrucker aktivieren",()->startActivity(new Intent(Settings.ACTION_PRINT_SETTINGS))));
 
         content.addView(section("Sicherheit"));
         content.addView(infoCard("Transport","Nur HTTPS/IPPS. TLS 1.2/1.3, System-Truststore, Hostname-Prüfung und optionales SPKI-Pinning."));
+        content.addView(infoCard("Authentifizierung","Bei HTTP 401 verarbeitet die App Basic- und Digest-Challenges. Für Netzwerkdrucker nennt E-POST z. B. Benutzername@Firmen-ID."));
         content.addView(infoCard("Lokale Daten","Zugangsdaten und Profile werden AES-256-GCM-verschlüsselt. Der Schlüssel bleibt im Android Keystore."));
-        content.addView(infoCard("Adressfenster","Adresskorrekturen folgen den E-POST-Werkzeugen und Vorlagen. Die App erfindet keine eigenen X/Y-Verschiebungen."));
     }
 
     private MaterialCardView infoCard(String title,String text){
