@@ -34,6 +34,7 @@ public class ProfileEditActivity extends AppCompatActivity {
     @Override protected void onCreate(Bundle b){
         SettingsStore.applySavedAppearance(this);
         super.onCreate(b);
+        SettingsStore.applyDynamicColors(this);
         String id=getIntent().getStringExtra("profileId");
         profile=id==null?new Profile():SecureStore.find(this,id);
         if(profile==null)profile=new Profile();
