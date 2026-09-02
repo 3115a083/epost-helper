@@ -56,7 +56,7 @@ public final class ConnectionTester {
         String printerUri=p.url.trim();
         if(printerUri.startsWith("https://")) printerUri="ipps://"+printerUri.substring("https://".length());
         byte[] request=IppEncoder.getPrinterAttributesHeader(printerUri,p.username);
-        Request req=auth(new Request.Builder().url(url),p)
+        Request req=new Request.Builder().url(url)
                 .post(RequestBody.create(request,IPP)).header("Content-Type","application/ipp").build();
         try(Response r=client.newCall(req).execute()){
             if(!r.isSuccessful()) {
