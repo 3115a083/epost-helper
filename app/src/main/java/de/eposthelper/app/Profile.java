@@ -7,11 +7,13 @@ import java.util.UUID;
 public final class Profile {
     public static final String PROVIDER_POST="deutsche_post";
     public static final String PROVIDER_LETTERXPRESS="letterxpress";
+    public static final String PROVIDER_DEBUG="debug";
 
     public static final String TYPE_WEBDAV="WEBDAV";
     public static final String TYPE_IPP="IPP";
     public static final String TYPE_LXP_API="LXP_API";
     public static final String TYPE_LXP_SFTP="LXP_SFTP";
+    public static final String TYPE_DEBUG="DEBUG";
 
     public String id=UUID.randomUUID().toString();
     public String name="Standard";
