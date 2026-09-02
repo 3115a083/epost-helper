@@ -279,16 +279,7 @@ public class OutboxActivity extends AppCompatActivity {
     }
 
     private Bitmap renderFirstPage(File file,int width) throws Exception{
-        try(ParcelFileDescriptor pfd=ParcelFileDescriptor.open(file,ParcelFileDescriptor.MODE_READ_ONLY);
-            PdfRenderer renderer=new PdfRenderer(pfd);
-            PdfRenderer.Page page=renderer.openPage(0)){
-            int height=Math.max(1,Math.round(width*(page.getHeight()/(float)page.getWidth())));
-            Bitmap bitmap=Bitmap.createBitmap(width,height,Bitmap.Config.ARGB_8888);
-            android.graphics.Canvas paper=new android.graphics.Canvas(bitmap);
-            paper.drawColor(android.graphics.Color.WHITE);
-            page.render(bitmap,null,null,PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
-            return bitmap;
-        }
+        return PdfPreviewRenderer.renderFirstPage(file,width,PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
     }
 
     private void renderOptions(){
