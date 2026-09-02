@@ -48,9 +48,11 @@ public class EPostPrintService extends PrintService {
                     String route=Profile.TYPE_LXP_API.equals(p.type)?"API":
                             Profile.TYPE_LXP_SFTP.equals(p.type)?"SFTP":
                             Profile.TYPE_IPP.equals(p.type)?"IPP":"WebDAV";
-                    infos.add(new PrinterInfo.Builder(id,provider+" · "+p.name,PrinterInfo.STATUS_IDLE)
+                    PrinterInfo.Builder printer=new PrinterInfo.Builder(id,provider+" · "+p.name,PrinterInfo.STATUS_IDLE)
                             .setDescription(route+" · Erweiterte Versandoptionen verfügbar")
-                            .setCapabilities(caps).build());
+                            .setCapabilities(caps);
+                    printer.setIconResourceId(Profile.PROVIDER_LETTERXPRESS.equals(p.provider)?R.drawable.ic_provider_lxp:R.drawable.ic_provider_post);
+                    infos.add(printer.build());
                 }
                 addPrinters(infos);
             }
