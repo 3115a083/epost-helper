@@ -19,6 +19,11 @@ import java.io.File;
 public final class AddressCorrectionProcessor {
     private AddressCorrectionProcessor(){}
 
+    public static String encode(RectF r){
+        if(r==null||r.isEmpty())return "";
+        return String.format(java.util.Locale.US,"rect:%.6f,%.6f,%.6f,%.6f",r.left,r.top,r.right,r.bottom);
+    }
+
     public static RectF decode(String value){
         try{
             if(value!=null&&value.startsWith("rect:")){
@@ -34,9 +39,12 @@ public final class AddressCorrectionProcessor {
     }
 
     public static File apply(Context c,File input,Profile p,RectF targetSender,RectF targetRecipient) throws Exception{
-        RectF sourceSender=decode(p.senderWindow);
-        RectF sourceRecipient=decode(p.recipientWindow);
-        if(sourceSender.isEmpty()||sourceRecipient.isEmpty())throw new IllegalStateException("Adressbereiche sind im Profil noch nicht konfiguriert.");
+        return apply(c,input,decode(p.senderWindow),decode(p.recipientWindow),targetSender,targetRecipient);
+    }
+
+    public static File apply(Context c,File input,RectF sourceSender,RectF sourceRecipient,RectF targetSender,RectF targetRecipient) throws Exception{
+        if(sourceSender==null||sourceRecipient==null||sourceSender.isEmpty()||sourceRecipient.isEmpty())
+            throw new IllegalStateException("Quellbereiche für Absender und Empfänger fehlen.");
 
         PDFBoxResourceLoader.init(c.getApplicationContext());
         File output=File.createTempFile("address-corrected-",".pdf",c.getCacheDir());
