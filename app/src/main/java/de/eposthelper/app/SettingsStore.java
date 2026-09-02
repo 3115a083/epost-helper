@@ -9,6 +9,7 @@ public final class SettingsStore {
     private static final String MODE="appearance";
     private static final String PALETTE="palette";
     private static final String DEBUG="debug";
+    private static final String OUTBOX_FOLDER="outbox_folder";
     private SettingsStore(){}
 
     public static String appearance(Context c){
@@ -48,6 +49,13 @@ public final class SettingsStore {
     }
     public static void setDebugMode(Context c,boolean enabled){
         c.getSharedPreferences(PREF,Context.MODE_PRIVATE).edit().putBoolean(DEBUG,enabled).apply();
+    }
+
+    public static String outboxFolder(Context c){
+        return c.getSharedPreferences(PREF,Context.MODE_PRIVATE).getString(OUTBOX_FOLDER,"");
+    }
+    public static void setOutboxFolder(Context c,String uri){
+        c.getSharedPreferences(PREF,Context.MODE_PRIVATE).edit().putString(OUTBOX_FOLDER,uri==null?"":uri).apply();
     }
 
     public static int[] gradient(Context c){
