@@ -11,6 +11,9 @@ android {
         versionCode 23
         versionName '0.5.0'
     }
+    buildFeatures {
+        buildConfig true
+    }
     buildTypes {
         release {
             minifyEnabled true
