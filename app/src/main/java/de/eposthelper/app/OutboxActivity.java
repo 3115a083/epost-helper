@@ -901,8 +901,10 @@ public class OutboxActivity extends AppCompatActivity {
             DebugUtil.error(this,button,"Öffne zuerst die große Adressvorschau und bestätige Original- und Zielbereiche.");
             return;
         }
-        if(addressPreview.hasCollision()&&!o.addressCorrection){
-            DebugUtil.error(this,button,"Adresslayout kollidiert mit Sichtfenster oder Portobereich. Prüfe die Adresskorrektur vor dem Versand.");
+        if(addressPreview.hasCollision()){
+            DebugUtil.error(this,button,o.addressCorrection
+                    ?"Die korrigierte Zielposition kollidiert noch mit Sichtfenster oder Portobereich. Öffne die Adressvorschau und verschiebe die Felder."
+                    :"Adresslayout kollidiert mit Sichtfenster oder Portobereich. Aktiviere und prüfe die Adresskorrektur vor dem Versand.");
             return;
         }
 
