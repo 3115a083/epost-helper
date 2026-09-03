@@ -8,4 +8,8 @@ public final class RecentLetter {
     public String createdAt="";
     public double amount=0;
     public double vat=0;
+    public String registered="Nein";
+    public boolean color=false;
+    public boolean duplex=false;
+    public String shipping="national";
 }
