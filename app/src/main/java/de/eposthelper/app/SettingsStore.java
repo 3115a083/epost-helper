@@ -5,6 +5,7 @@ import android.content.Context;
 import androidx.appcompat.app.AppCompatDelegate;
 import com.google.android.material.color.DynamicColors;
 import com.google.android.material.color.MaterialColors;
+import org.json.JSONObject;
 
 public final class SettingsStore {
     private static final String PREF="ui_settings";
@@ -84,5 +85,25 @@ public final class SettingsStore {
     }
     public static void setOutboxFolder(Context c,String uri){
         c.getSharedPreferences(PREF,Context.MODE_PRIVATE).edit().putString(OUTBOX_FOLDER,uri==null?"":uri).apply();
+    }
+
+    public static JSONObject exportJson(Context c) throws Exception{
+        JSONObject o=new JSONObject();
+        o.put("appearance",appearance(c));
+        o.put("palette",palette(c));
+        o.put("debug",debugMode(c));
+        o.put("outboxFolder",outboxFolder(c));
+        return o;
+    }
+
+    public static void importJson(Context c,JSONObject o){
+        if(o==null)return;
+        c.getSharedPreferences(PREF,Context.MODE_PRIVATE).edit()
+                .putString(MODE,o.optString("appearance","system"))
+                .putString(PALETTE,o.optString("palette","material_you"))
+                .putBoolean(DEBUG,o.optBoolean("debug",false))
+                .putString(OUTBOX_FOLDER,o.optString("outboxFolder",""))
+                .apply();
+        applySavedAppearance(c);
     }
 }
