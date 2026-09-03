@@ -5,7 +5,6 @@ import android.graphics.RectF;
 import com.tom_roush.pdfbox.android.PDFBoxResourceLoader;
 import com.tom_roush.pdfbox.pdmodel.PDDocument;
 import com.tom_roush.pdfbox.text.PDFTextStripperByArea;
-import java.awt.Rectangle;
 import java.io.File;
 import java.util.Locale;
 
@@ -19,9 +18,9 @@ public final class AddressTextExtractor {
             try(PDDocument doc=PDDocument.load(pdf)){
                 float w=doc.getPage(0).getMediaBox().getWidth();
                 float h=doc.getPage(0).getMediaBox().getHeight();
-                Rectangle area=new Rectangle(
-                        Math.round(normalized.left*w),Math.round(normalized.top*h),
-                        Math.round(normalized.width()*w),Math.round(normalized.height()*h));
+                android.graphics.RectF area=new android.graphics.RectF(
+                        normalized.left*w,normalized.top*h,
+                        normalized.right*w,normalized.bottom*h);
                 PDFTextStripperByArea stripper=new PDFTextStripperByArea();
                 stripper.addRegion("recipient",area);stripper.extractRegions(doc.getPage(0));
                 String text=stripper.getTextForRegion("recipient");
