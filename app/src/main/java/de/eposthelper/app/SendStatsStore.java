@@ -49,6 +49,7 @@ public final class SendStatsStore {
         long cutoff=System.currentTimeMillis()-5L*366L*24L*60L*60L*1000L;
         all.removeIf(x->x.timestamp<cutoff);
         save(c,all);
+        DeviceTransferStore.refresh(c);
     }
 
     public static Summary summarize(Context c,Period period,List<RecentLetter> remote,String remoteProfileId,boolean useRemote){
