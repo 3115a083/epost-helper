@@ -103,7 +103,7 @@ public final class OutboxStore {
             String folderName=dir.getName()==null?"":dir.getName();
             if("debug".equalsIgnoreCase(folderName))continue;
 
-            JobOptions preset=ImportPreset.parse(folderName);
+            JobOptions preset=AutoFolderPresets.parse(folderName);
             if(preset==null)continue;
 
             for(DocumentFile f:dir.listFiles()){
@@ -114,7 +114,8 @@ public final class OutboxStore {
                 int before=load(c).size();
                 OutboxItem item=add(c,f.getUri(),safeName(f),true,preset,folderName);
                 if(load(c).size()>before)count++;
-                if(item!=null)PreparedLetterStore.addAutoImported(c,item);
+                // AutoFolderPresets.importPrepared() creates the prepared output copy.
+                // Keeping this raw item as well gives the user an input-basket view.
             }
         }
 
