@@ -40,6 +40,7 @@ public class AddressEditActivity extends AppCompatActivity {
     private RectF targetRecipient=new RectF();
 
     private boolean sourceMode=true;
+    private boolean targetCustomized=false;
     private MaterialSwitch snap;
     private TextView hint;
     private TextView previewStatus;
@@ -121,6 +122,10 @@ public class AddressEditActivity extends AppCompatActivity {
             if(!checked)return;
             saveCurrentBoxes();
             sourceMode=id==source.getId();
+            if(!sourceMode&&!targetCustomized&&profile!=null){
+                targetSender=AddressLayoutRules.moveLike(sourceSender,AddressLayoutRules.targetSender(profile,options));
+                targetRecipient=AddressLayoutRules.moveLike(sourceRecipient,AddressLayoutRules.targetRecipient(profile,options));
+            }
             applyMode();
         });
         controls.addView(modes);
@@ -156,6 +161,7 @@ public class AddressEditActivity extends AppCompatActivity {
             }else{
                 targetSender=new RectF(sender);
                 targetRecipient=new RectF(recipient);
+                targetCustomized=true;
             }
             updateHint();
         });
