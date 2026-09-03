@@ -2,6 +2,7 @@ package de.eposthelper.app;
 
 import org.json.JSONException;
 import org.json.JSONObject;
+
 import java.util.UUID;
 
 public final class Profile {
@@ -32,20 +33,34 @@ public final class Profile {
     public boolean addressCorrection=false;
     public String recipientWindow="";
     public String senderWindow="";
-    public boolean showBalanceOnHome=true;
+    public boolean showBalanceOnHome=false;
     public boolean connectionVerified=false;
     public long connectionVerifiedAt=0L;
     public String lastConnectionMessage="";
 
     public JSONObject toJson() throws JSONException{
         JSONObject o=new JSONObject();
-        o.put("id",id);o.put("name",name);o.put("provider",provider);o.put("type",type);o.put("url",url);
-        o.put("username",username);o.put("password",password);o.put("apiKey",apiKey);
-        o.put("certificatePin",certificatePin);o.put("sshHostKey",sshHostKey);
-        o.put("active",active);o.put("duplex",duplex);o.put("color",color);o.put("registeredMail",registeredMail);
-        o.put("addressCorrection",addressCorrection);o.put("recipientWindow",recipientWindow);o.put("senderWindow",senderWindow);
+        o.put("id",id);
+        o.put("name",name);
+        o.put("provider",provider);
+        o.put("type",type);
+        o.put("url",url);
+        o.put("username",username);
+        o.put("password",password);
+        o.put("apiKey",apiKey);
+        o.put("certificatePin",certificatePin);
+        o.put("sshHostKey",sshHostKey);
+        o.put("active",active);
+        o.put("duplex",duplex);
+        o.put("color",color);
+        o.put("registeredMail",registeredMail);
+        o.put("addressCorrection",addressCorrection);
+        o.put("recipientWindow",recipientWindow);
+        o.put("senderWindow",senderWindow);
         o.put("showBalanceOnHome",showBalanceOnHome);
-        o.put("connectionVerified",connectionVerified);o.put("connectionVerifiedAt",connectionVerifiedAt);o.put("lastConnectionMessage",lastConnectionMessage);
+        o.put("connectionVerified",connectionVerified);
+        o.put("connectionVerifiedAt",connectionVerifiedAt);
+        o.put("lastConnectionMessage",lastConnectionMessage);
         return o;
     }
 
@@ -70,7 +85,7 @@ public final class Profile {
         p.addressCorrection=o.optBoolean("addressCorrection",false);
         p.recipientWindow=o.optString("recipientWindow","");
         p.senderWindow=o.optString("senderWindow","");
-        p.showBalanceOnHome=o.has("showBalanceOnHome")?o.optBoolean("showBalanceOnHome",true):o.optBoolean("showBalance",true);
+        p.showBalanceOnHome=o.optBoolean("showBalanceOnHome",false);
         p.connectionVerified=o.optBoolean("connectionVerified",false);
         p.connectionVerifiedAt=o.optLong("connectionVerifiedAt",0L);
         p.lastConnectionMessage=o.optString("lastConnectionMessage","");
