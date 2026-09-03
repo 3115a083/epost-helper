@@ -83,45 +83,26 @@ public final class OutboxStore {
         if(root==null||!root.canRead())return 0;
 
         Set<String> blocked=blocked(c);
-        Set<String> existing=new HashSet<>();
+        List<OutboxItem> items=load(c);
+        Set<String> known=new HashSet<>();
+        for(OutboxItem i:items)known.add(i.uri);
+
         int count=0;
-
-        // Root PDFs enter only the input basket.
         for(DocumentFile f:root.listFiles()){
-            if(f.isFile()&&isPdf(f)){
-                String u=f.getUri().toString();existing.add(u);
-                if(blocked.contains(u))continue;
-                int before=load(c).size();
-                add(c,f.getUri(),safeName(f),true);
-                if(load(c).size()>before)count++;
-            }
+            if(!f.isFile()||!isPdf(f))continue;
+            String u=f.getUri().toString();
+            if(blocked.contains(u)||known.contains(u))continue;
+
+            OutboxItem item=new OutboxItem();
+            item.uri=u;
+            item.name=safeName(f);
+            item.deleteAfterSend=true;
+            items.add(item);
+            known.add(u);
+            count++;
         }
 
-        // One-level option folders. "debug" is intentionally never imported.
-        for(DocumentFile dir:root.listFiles()){
-            if(!dir.isDirectory())continue;
-            String folderName=dir.getName()==null?"":dir.getName();
-            if("debug".equalsIgnoreCase(folderName))continue;
-
-            JobOptions preset=AutoFolderPresets.parse(folderName);
-            if(preset==null)continue;
-
-            for(DocumentFile f:dir.listFiles()){
-                if(!f.isFile()||!isPdf(f))continue;
-                String u=f.getUri().toString();existing.add(u);
-                if(blocked.contains(u))continue;
-
-                int before=load(c).size();
-                OutboxItem item=add(c,f.getUri(),safeName(f),true,preset,folderName);
-                if(load(c).size()>before)count++;
-                // AutoFolderPresets.importPrepared() creates the prepared output copy.
-                // Keeping this raw item as well gives the user an input-basket view.
-            }
-        }
-
-        // Keep blocked URIs only while they still exist in the watched tree.
-        blocked.removeIf(u->!existing.contains(u));
-        saveBlocked(c,blocked);
+        if(count>0)save(c,items);
         return count;
     }
 
