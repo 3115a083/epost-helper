@@ -790,6 +790,7 @@ public class OutboxActivity extends AppCompatActivity {
         button.setEnabled(false);
         button.setText("Wird gespeichert…");
         boolean combine=mergeAsOne();
+        boolean preserveSheets=preserveSheetBoundaries();
 
         new Thread(()->{
             File separated=null;
@@ -830,7 +831,7 @@ public class OutboxActivity extends AppCompatActivity {
                 }
 
                 File sourceForQueue=merged;
-                if(working.size()>1&&preserveSheetBoundaries()){
+                if(working.size()>1&&preserveSheets){
                     separated=PdfMergeUtil.merge(this,working,true);
                     sourceForQueue=separated;
                 }
@@ -929,6 +930,7 @@ public class OutboxActivity extends AppCompatActivity {
         PreparedJob preparedAtSend=editingPrepared;
         List<OutboxItem> sentItems=new ArrayList<>(working);
         boolean combine=mergeAsOne();
+        boolean preserveSheets=preserveSheetBoundaries();
 
         new Thread(()->{
             File separated=null;
@@ -957,7 +959,7 @@ public class OutboxActivity extends AppCompatActivity {
                     }
                 }else{
                     File source=merged;
-                    if(sentItems.size()>1&&preserveSheetBoundaries()){
+                    if(sentItems.size()>1&&preserveSheets){
                         separated=PdfMergeUtil.merge(this,sentItems,true);
                         source=separated;
                     }
