@@ -69,7 +69,7 @@ public final class SendStatsStore {
                 out.count++;
                 double value=r.amount+r.vat;
                 if(value>0){out.cost+=value;out.knownCostCount++;}else out.unknownCostCount++;
-                String type=(r.status==null||r.status.isBlank())?"LetterXpress":r.status;
+                String type=(r.registered==null||"Nein".equals(r.registered)?"Standard":r.registered)+" · "+(r.color?"Farbe":"SW")+" · "+(r.duplex?"Duplex":"Einseitig");
                 out.typeCounts.put(type,out.typeCounts.getOrDefault(type,0)+1);
             }
         }
