@@ -51,6 +51,7 @@ public class MainActivity extends AppCompatActivity {
     private boolean statsRemoteLoaded=false;
     private boolean statsRemoteAvailable=false;
     private List<RecentLetter> statsRemoteCache=new ArrayList<>();
+    private String statsRemoteProfileId="";
 
     private final ActivityResultLauncher<Uri> folderPicker=registerForActivityResult(
             new ActivityResultContracts.OpenDocumentTree(),uri->{
@@ -188,6 +189,11 @@ public class MainActivity extends AppCompatActivity {
         Profile api=firstLetterXpressApi(profiles);
         Profile statsApi=firstStatsApi(profiles);
         Profile balanceProfile=firstBalanceApi(profiles);
+        if(statsApi==null){
+            statsRemoteCache.clear();statsRemoteLoaded=false;statsRemoteAvailable=false;statsRemoteProfileId="";
+        }else if(!statsApi.id.equals(statsRemoteProfileId)){
+            statsRemoteCache.clear();statsRemoteLoaded=false;statsRemoteAvailable=false;statsRemoteProfileId=statsApi.id;
+        }
 
         SendStatsStore.Period[] periods={
                 SendStatsStore.Period.THIS_MONTH,
@@ -282,6 +288,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void loadStatsRemote(Profile p){
         if(p==null||statsRemoteLoading)return;
+        statsRemoteProfileId=p.id;
         statsRemoteLoading=true;
         new Thread(()->{
             try{
