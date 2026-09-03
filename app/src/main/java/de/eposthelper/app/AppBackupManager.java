@@ -89,6 +89,7 @@ public final class AppBackupManager {
             JSONObject o=sa.optJSONObject(i);if(o!=null)stats.add(SendStat.fromJson(o));
         }
         SendStatsStore.save(c,stats);
+        DebugProfileManager.ensure(c);
         DeviceTransferStore.refresh(c);
     }
 
