@@ -527,6 +527,26 @@ public class MainActivity extends AppCompatActivity {
         Snackbar.make(content,"Debugmodus aktiviert. Lokales Debug-Druckprofil wurde eingerichtet.",Snackbar.LENGTH_LONG).show();
     }
 
+    private void importFoldersNow(MaterialButton button){
+        String folder=SettingsStore.outboxFolder(this);
+        if(folder==null||folder.isBlank()){
+            Snackbar.make(content,"Bitte zuerst einen Importordner auswählen.",Snackbar.LENGTH_SHORT).show();
+            return;
+        }
+        button.setEnabled(false);
+        button.setText("Import läuft…");
+        new Thread(()->{
+            int raw=OutboxStore.importFolder(this);
+            int prepared=AutoFolderPresets.importPrepared(this);
+            runOnUiThread(()->{
+                button.setEnabled(true);
+                button.setText("Ordner jetzt importieren");
+                Snackbar.make(content,(raw+prepared)>0?(raw+prepared)+" PDF(s) importiert.":"Keine neuen PDFs gefunden.",Snackbar.LENGTH_LONG).show();
+                if(currentTab==2)render();
+            });
+        },"manual-folder-import").start();
+    }
+
     private void renderSettings(){
         content.addView(section("Darstellung"));
 
