@@ -190,6 +190,16 @@ public final class LetterXpressApiClient {
                 x.createdAt=job.optString("created_at","");
                 x.amount=item.optDouble("amount",0);
                 x.vat=item.optDouble("vat",0);
+                String reg=item.optString("registered","");
+                if("r1".equalsIgnoreCase(reg))x.registered="Einschreiben Einwurf";
+                else if("r2".equalsIgnoreCase(reg))x.registered="Einschreiben";
+                JSONObject spec=item.optJSONObject("specification");
+                if(spec==null)spec=job.optJSONObject("specification");
+                if(spec!=null){
+                    x.color="4".equals(spec.optString("color"))||spec.optBoolean("color",false);
+                    x.duplex="duplex".equalsIgnoreCase(spec.optString("mode"))||spec.optBoolean("duplex",false);
+                    x.shipping=spec.optString("shipping","national");
+                }
                 result.add(x);
             }
         }
