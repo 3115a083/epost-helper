@@ -142,6 +142,14 @@ public final class LetterXpressApiClient {
         return data==null?"API erreichbar":"API erreichbar · Guthaben "+data.optDouble("balance",0)+" "+data.optString("currency","EUR");
     }
 
+    public static String balance(Profile p) throws Exception{
+        JSONObject root=new JSONObject();root.put("auth",auth(p,"live"));
+        JSONObject out=getWithJsonBody("/balance",root);
+        JSONObject data=out.optJSONObject("data");
+        if(data==null)return "";
+        return String.format(java.util.Locale.GERMANY,"%.2f %s",data.optDouble("balance",0),data.optString("currency","EUR"));
+    }
+
     public static double price(Profile p,JobOptions o,int pages) throws Exception{
         JSONObject root=new JSONObject();root.put("auth",auth(p,"test"));
         JSONObject letter=new JSONObject();letter.put("specification",specification(o,pages));
