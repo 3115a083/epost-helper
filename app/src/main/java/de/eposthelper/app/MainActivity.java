@@ -451,7 +451,7 @@ public class MainActivity extends AppCompatActivity {
 
         String folder=SettingsStore.outboxFolder(this);
         LinearLayout info=new LinearLayout(this);info.setOrientation(LinearLayout.VERTICAL);
-        info.addView(UiKit.heading(this,"Automatischer Import",16));
+        info.addView(UiKit.heading(this,"Importordner",16));
         TextView folderInfo=UiKit.body(this,folder.isBlank()?"Kein Importordner eingerichtet.":"Aktiver Ordner: "+folderDisplayName(folder));
         folderInfo.setPadding(0,UiKit.dp(this,5),0,0);info.addView(folderInfo);
         content.addView(UiKit.surfaceCard(this,info));
@@ -762,7 +762,7 @@ public class MainActivity extends AppCompatActivity {
         LinearLayout folderBox=new LinearLayout(this);folderBox.setOrientation(LinearLayout.VERTICAL);
         String folderUri=SettingsStore.outboxFolder(this);
         folderBox.addView(UiKit.heading(this,folderUri.isBlank()?"Kein Importordner":"Aktueller Importordner",16));
-        TextView folder=UiKit.mono(this,folderUri.isBlank()?"PDF-Ordner auswählen, um Dateien automatisch in den Druckausgang zu übernehmen.":folderDisplayName(folderUri));
+        TextView folder=UiKit.mono(this,folderUri.isBlank()?"PDF-Ordner auswählen. Die App durchsucht ihn nur, wenn du im Ausgang auf Importieren tippst.":folderDisplayName(folderUri));
         folder.setPadding(0,UiKit.dp(this,6),0,UiKit.dp(this,10));folderBox.addView(folder);
         MaterialButton choose=UiKit.tonal(this,"Ordner auswählen");choose.setOnClickListener(v->folderPicker.launch(null));folderBox.addView(choose);
         MaterialButton presets=UiKit.tonal(this,"Unterordner für Druckoptionen anlegen");
