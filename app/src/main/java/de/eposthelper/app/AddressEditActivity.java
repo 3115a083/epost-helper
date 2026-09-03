@@ -208,6 +208,7 @@ public class AddressEditActivity extends AppCompatActivity {
 
         preview.setInteractive(true);
         if(sourceMode){
+            preview.setTargetPostageLock(null);
             preview.setBoxes(sourceSender,sourceRecipient);
             preview.setReservedArea(null,null);
             preview.setWindowArea(null,null);
@@ -215,9 +216,12 @@ public class AddressEditActivity extends AppCompatActivity {
             if(snap.isChecked())snap.setChecked(false);
             renderSourcePreview();
         }else{
-            preview.setBoxes(targetSender,targetRecipient);
             RectF window=profile==null?new RectF():AddressLayoutRules.window(profile,options);
             RectF postage=profile==null?new RectF():AddressLayoutRules.postage(profile,options);
+            preview.setTargetPostageLock(postage);
+            preview.setBoxes(targetSender,targetRecipient);
+            targetSender=preview.senderBox();
+            targetRecipient=preview.recipientBox();
             preview.setWindowArea(window,window.isEmpty()?null:"Brief-Sichtfenster");
             preview.setReservedArea(postage,postage.isEmpty()?null:"Porto / DV-Freimachung");
             preview.setRecipientSafetyArea(null,null);
@@ -230,11 +234,9 @@ public class AddressEditActivity extends AppCompatActivity {
         if(sourceMode){
             hint.setText("Ziehe die beiden Rahmen auf Absender und Empfänger im vorhandenen Brief. Ohne Einrasten kannst du Position und Größe frei ändern.");
         }else if(preview!=null&&preview.hasPostageCollision()){
-            hint.setText("Rot: Ein verschobener Adressbereich ragt in das Porto-/DV-Feld. Verschiebe oder verkleinere den Rahmen, bevor du die Korrektur übernimmst.");
-        }else if(preview!=null&&preview.hasWindowClip()){
-            hint.setText("Rot: Ein Teil des verschobenen Adressbereichs liegt außerhalb des Brief-Sichtfensters und könnte im Umschlag abgeschnitten werden.");
+            hint.setText("Rot: Ein verschobener Adressbereich ragt in das Porto-/DV-Feld. Absender und Empfänger bleiben vertikal oberhalb bzw. unterhalb des Portobereichs fixiert.");
         }else{
-            hint.setText("Die Vorschau zeigt die tatsächlich verschobenen Adressfelder in der PDF. Türkis markiert das Sichtfenster, Orange den Porto-/DV-Bereich. Rot bedeutet, dass die gewählte Zielposition abgeschnitten würde oder mit dem Portobereich kollidiert.");
+            hint.setText("Die Zielansicht zeigt die tatsächliche Verschiebung. Absender und Empfänger bleiben vertikal oberhalb bzw. unterhalb des Portobereichs fixiert. Ein Herausragen aus dem Sichtfenster ist nur ein Hinweis und blockiert den Versand nicht.");
         }
     }
 

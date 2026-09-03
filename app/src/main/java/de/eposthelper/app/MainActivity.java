@@ -143,7 +143,7 @@ public class MainActivity extends AppCompatActivity {
 
         nav=new LinearLayout(this);nav.setGravity(Gravity.CENTER);nav.setPadding(UiKit.dp(this,8),UiKit.dp(this,5),UiKit.dp(this,8),UiKit.dp(this,8));
         String[] labels={"Start","Drucken","Ausgang","Einstellungen"};
-        int[] icons={R.drawable.ic_nav_home,R.drawable.ic_nav_print,R.drawable.ic_nav_cart,R.drawable.ic_nav_settings};
+        int[] icons={R.drawable.ic_nav_home,R.drawable.ic_nav_print,R.drawable.ic_nav_send,R.drawable.ic_nav_settings};
         for(int i=0;i<labels.length;i++){
             final int tab=i;
             LinearLayout item=new LinearLayout(this);item.setOrientation(LinearLayout.VERTICAL);item.setGravity(Gravity.CENTER);
@@ -201,8 +201,8 @@ public class MainActivity extends AppCompatActivity {
                 SendStatsStore.Period.THIS_YEAR
         };
         String[] periodNames={
-                java.time.LocalDate.now().getMonth().getDisplayName(java.time.format.TextStyle.FULL,java.util.Locale.GERMANY)+" "+java.time.LocalDate.now().getYear(),
-                java.time.LocalDate.now().minusMonths(1).getMonth().getDisplayName(java.time.format.TextStyle.FULL,java.util.Locale.GERMANY)+" "+java.time.LocalDate.now().minusMonths(1).getYear(),
+                "Laufender Monat",
+                "Vormonat",
                 "Jahr "+java.time.LocalDate.now().getYear()
         };
         statsPeriodIndex=Math.max(0,Math.min(statsPeriodIndex,2));
@@ -807,18 +807,16 @@ public class MainActivity extends AppCompatActivity {
         presetHelp.setTextSize(12);presetHelp.setPadding(0,UiKit.dp(this,7),0,0);folderBox.addView(presetHelp);
         content.addView(UiKit.surfaceCard(this,folderBox));
 
-        content.addView(section("Backup & Gerätewechsel"));
-        content.addView(actionCard(R.drawable.ic_nav_settings,
-                "Einstellungen & Statistiken sichern",
-                "Passwortgeschützter Export/Import und portable Geräteübertragung ohne API-Keys",
-                ()->startActivity(new Intent(this,BackupActivity.class))));
-
         content.addView(section("Versandprofile"));
         renderProfileSettings();
 
         content.addView(section("Werkzeuge"));
         content.addView(actionCard(R.drawable.ic_nav_profiles,"Versandfeld-Assistent","Adressbereiche am eigenen PDF-Brieflayout festlegen",()->startActivity(new Intent(this,AddressConfigActivity.class))));
         content.addView(actionCard(R.drawable.ic_nav_print,"Android-Druckdienst","Briefversand als Android-Systemdrucker aktivieren",()->startActivity(new Intent(Settings.ACTION_PRINT_SETTINGS))));
+        content.addView(actionCard(R.drawable.ic_nav_settings,
+                "Export / Import & Gerätewechsel",
+                "Passwortgeschützte Sicherung von Einstellungen und Statistiken sowie portable Geräteübertragung ohne API-Keys",
+                ()->startActivity(new Intent(this,BackupActivity.class))));
 
         TextView security=UiKit.body(this,"TLS-geschützte Übertragung, Zertifikatsprüfung und verschlüsselte lokale Zugangsdaten.");
         security.setTextSize(12);security.setPadding(0,UiKit.dp(this,14),0,UiKit.dp(this,18));content.addView(security);

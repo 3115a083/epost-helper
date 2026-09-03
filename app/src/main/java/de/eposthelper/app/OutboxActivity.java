@@ -796,8 +796,6 @@ public class OutboxActivity extends AppCompatActivity {
         if(p==null)return;
         if(addressPreview.hasPostageCollision()){
             layoutHint.setText("Adressbereich kollidiert mit dem Porto-/DV-Feld. Öffne die große Vorschau und korrigiere die Zielposition.");
-        }else if(addressPreview.hasWindowClip()){
-            layoutHint.setText("Ein Teil des Adressbereichs liegt außerhalb des Brief-Sichtfensters. Öffne die große Vorschau und prüfe die Zielposition.");
         }else if(localCorrection.isChecked()){
             layoutHint.setText(addressEdited
                     ?"Adresskorrektur aktiv. Original- und Zielbereiche wurden für diesen Brief bestätigt."
@@ -985,8 +983,8 @@ public class OutboxActivity extends AppCompatActivity {
         }
         if(addressPreview.hasCollision()){
             DebugUtil.error(this,button,o.addressCorrection
-                    ?"Die korrigierte Zielposition kollidiert noch mit Sichtfenster oder Portobereich. Öffne die Adressvorschau und verschiebe die Felder."
-                    :"Adresslayout kollidiert mit Sichtfenster oder Portobereich. Aktiviere und prüfe die Adresskorrektur vor dem Versand.");
+                    ?"Die korrigierte Zielposition kollidiert noch mit dem Porto-/DV-Bereich. Öffne die Adressvorschau und verschiebe die Felder."
+                    :"Adresslayout kollidiert mit dem Porto-/DV-Bereich. Aktiviere und prüfe die Adresskorrektur vor dem Versand.");
             return;
         }
 

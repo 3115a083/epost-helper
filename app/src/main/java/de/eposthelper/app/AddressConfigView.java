@@ -10,7 +10,7 @@ import android.view.MotionEvent;
 import android.view.View;
 
 public final class AddressConfigView extends View {
-    private static final float SNAP_X=0.105f;
+    private static final float SNAP_X=20f/210f;
     private static final float HANDLE=0.035f;
 
     private final Paint paint=new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -23,6 +23,8 @@ public final class AddressConfigView extends View {
     private final RectF reserved=new RectF();
     private final RectF recipientSafety=new RectF();
     private final RectF windowArea=new RectF();
+    private final RectF targetPostage=new RectF();
+    private boolean targetPostageLock=false;
 
     private RectF active;
     private boolean showReserved=false;
@@ -135,6 +137,21 @@ public final class AddressConfigView extends View {
         invalidate();
     }
 
+    public void setTargetPostageLock(RectF area){
+        if(area==null||area.isEmpty()){
+            targetPostage.setEmpty();
+            targetPostageLock=false;
+        }else{
+            targetPostage.set(area);
+            targetPostageLock=true;
+            lockToPostage(sender);
+            lockToPostage(recipient);
+        }
+        constrain(sender);
+        constrain(recipient);
+        invalidate();
+    }
+
     public boolean hasPostageCollision(){
         return showReserved&&(RectF.intersects(sender,reserved)||RectF.intersects(recipient,reserved));
     }
@@ -145,12 +162,16 @@ public final class AddressConfigView extends View {
     }
 
     public boolean hasCollision(){
-        return hasPostageCollision()||hasWindowClip();
+        return hasPostageCollision();
     }
 
     public void setBoxes(RectF senderBox,RectF recipientBox){
         if(senderBox!=null&&!senderBox.isEmpty())sender.set(senderBox);
         if(recipientBox!=null&&!recipientBox.isEmpty())recipient.set(recipientBox);
+        if(targetPostageLock){
+            lockToPostage(sender);
+            lockToPostage(recipient);
+        }
         constrain(sender);
         constrain(recipient);
         invalidate();
@@ -211,7 +232,7 @@ public final class AddressConfigView extends View {
 
         if(showWindow&&RectF.intersects(viewport,windowArea)){
             RectF wp=toPixels(windowArea);
-            int wc=hasWindowClip()?0xFFD32F2F:0xFF2E7D78;
+            int wc=0xFF2E7D78;
             paint.setStyle(Paint.Style.FILL);
             paint.setColor((wc&0x00FFFFFF)|0x12000000);
             canvas.drawRect(wp,paint);
@@ -328,6 +349,7 @@ public final class AddressConfigView extends View {
                 if(snapEnabled)snapBox(active);
             }
 
+            if(targetPostageLock)lockToPostage(active);
             constrain(active);
             invalidate();
             notifyChange();
@@ -351,6 +373,18 @@ public final class AddressConfigView extends View {
         float x=clamp(SNAP_X,viewport.left,viewport.right-w);
         box.left=x;
         box.right=x+w;
+    }
+
+    private void lockToPostage(RectF box){
+        if(!targetPostageLock||targetPostage.isEmpty()||box==null||box.isEmpty())return;
+        float h=box.height();
+        if(box==sender){
+            box.bottom=targetPostage.top;
+            box.top=box.bottom-h;
+        }else if(box==recipient){
+            box.top=targetPostage.bottom;
+            box.bottom=box.top+h;
+        }
     }
 
     private void constrain(RectF box){
