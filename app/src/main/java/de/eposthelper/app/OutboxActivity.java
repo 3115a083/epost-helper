@@ -744,6 +744,24 @@ public class OutboxActivity extends AppCompatActivity {
         }
     }
 
+    private boolean mergeAsOne(){
+        return editingPrepared!=null||working.size()<=1||mergeLetters==null||mergeLetters.isChecked();
+    }
+
+    private void fillPreparedJob(PreparedJob j,Profile p,JobOptions o){
+        j.profileId=p.id;
+        j.color=o.color;
+        j.duplex=o.duplex;
+        j.registered=o.registered;
+        j.c4=o.c4;
+        j.shipping=o.shipping;
+        j.addressCorrection=o.addressCorrection;
+        j.sourceSender=new RectF(sourceSender);
+        j.sourceRecipient=new RectF(sourceRecipient);
+        j.targetSender=new RectF(targetSender);
+        j.targetRecipient=new RectF(targetRecipient);
+    }
+
     private void savePrepared(MaterialButton button){
         Profile p=SecureStore.find(this,selectedProfileId);
         if(p==null){DebugUtil.error(this,button,"Bitte ein kompatibles Profil wählen.");return;}
@@ -754,105 +772,205 @@ public class OutboxActivity extends AppCompatActivity {
             return;
         }
 
-        button.setEnabled(false);button.setText("Wird gespeichert…");
+        button.setEnabled(false);
+        button.setText("Wird gespeichert…");
+        boolean combine=mergeAsOne();
+
         new Thread(()->{
+            File separated=null;
             try{
-                PreparedJob j=editingPrepared==null?new PreparedJob():editingPrepared;
-                j.profileId=p.id;j.color=o.color;j.duplex=o.duplex;j.registered=o.registered;j.c4=o.c4;j.shipping=o.shipping;j.addressCorrection=o.addressCorrection;
-                j.sourceSender=new RectF(sourceSender);j.sourceRecipient=new RectF(sourceRecipient);j.targetSender=new RectF(targetSender);j.targetRecipient=new RectF(targetRecipient);
-                if(j.name==null||j.name.isBlank()||"Brief".equals(j.name)){
-                    j.name=working.isEmpty()?"Vorbereiteter Brief":working.get(0).name+(working.size()>1?" +"+(working.size()-1):"");
+                if(editingPrepared!=null){
+                    fillPreparedJob(editingPrepared,p,o);
+                    PreparedJobStore.upsert(this,editingPrepared);
+                    runOnUiThread(()->{
+                        button.setEnabled(true);
+                        button.setText("Änderungen gespeichert");
+                        Snackbar.make(button,"Ausgang aktualisiert.",Snackbar.LENGTH_LONG).show();
+                    });
+                    return;
                 }
-                if(editingPrepared==null){
-                    File persisted=PreparedJobStore.persistPdf(this,merged,j.id);
-                    j.filePath=persisted.getAbsolutePath();
+
+                if(!combine&&working.size()>1){
+                    int created=0;
                     for(OutboxItem item:working){
+                        PreparedJob j=new PreparedJob();
+                        fillPreparedJob(j,p,o);
+                        j.name=item.name;
+                        File persisted=PreparedJobStore.persistUri(this,item.asUri(),j.id);
+                        j.filePath=persisted.getAbsolutePath();
                         j.inputNames.add(item.name);
                         if(item.deleteAfterSend)j.sourceUris.add(item.uri);
+                        RectF keyArea=sourceRecipient.isEmpty()?AddressCorrectionProcessor.decode(p.recipientWindow):sourceRecipient;
+                        j.recipientKey=AddressTextExtractor.recipientKey(this,persisted,keyArea);
+                        PreparedJobStore.upsert(this,j);
+                        created++;
                     }
-                    RectF keyArea=sourceRecipient.isEmpty()?AddressCorrectionProcessor.decode(p.recipientWindow):sourceRecipient;
-                    j.recipientKey=AddressTextExtractor.recipientKey(this,persisted,keyArea);
+                    int finalCreated=created;
+                    runOnUiThread(()->{
+                        button.setEnabled(true);
+                        button.setText("Im Ausgang gespeichert");
+                        Snackbar.make(button,finalCreated+" einzelne Briefe liegen im Ausgang.",Snackbar.LENGTH_LONG).show();
+                    });
+                    return;
                 }
+
+                File sourceForQueue=merged;
+                if(working.size()>1&&o.duplex){
+                    separated=PdfMergeUtil.merge(this,working,true);
+                    sourceForQueue=separated;
+                }
+
+                PreparedJob j=new PreparedJob();
+                fillPreparedJob(j,p,o);
+                j.name=working.isEmpty()?"Vorbereiteter Brief":working.get(0).name+(working.size()>1?" +"+(working.size()-1):"");
+                File persisted=PreparedJobStore.persistPdf(this,sourceForQueue,j.id);
+                j.filePath=persisted.getAbsolutePath();
+                for(OutboxItem item:working){
+                    j.inputNames.add(item.name);
+                    if(item.deleteAfterSend)j.sourceUris.add(item.uri);
+                }
+                RectF keyArea=sourceRecipient.isEmpty()?AddressCorrectionProcessor.decode(p.recipientWindow):sourceRecipient;
+                j.recipientKey=AddressTextExtractor.recipientKey(this,persisted,keyArea);
                 PreparedJobStore.upsert(this,j);
                 editingPrepared=j;
+
                 runOnUiThread(()->{
-                    button.setEnabled(true);button.setText("Im Ausgang gespeichert");
+                    button.setEnabled(true);
+                    button.setText("Im Ausgang gespeichert");
                     Snackbar.make(button,"Brief liegt im Ausgang.",Snackbar.LENGTH_LONG).show();
                 });
             }catch(Exception e){
-                runOnUiThread(()->{button.setEnabled(true);button.setText("Erneut speichern");DebugUtil.error(this,button,"Ausgang speichern",e);});
+                runOnUiThread(()->{
+                    button.setEnabled(true);
+                    button.setText("Erneut speichern");
+                    DebugUtil.error(this,button,"Ausgang speichern",e);
+                });
+            }finally{
+                if(separated!=null)separated.delete();
             }
         },"prepare-outbox").start();
+    }
+
+    private File copyUriToTemp(OutboxItem item) throws Exception{
+        File tmp=File.createTempFile("single-letter-",".pdf",getCacheDir());
+        try(java.io.InputStream in=getContentResolver().openInputStream(item.asUri());
+            java.io.FileOutputStream out=new java.io.FileOutputStream(tmp)){
+            if(in==null)throw new IllegalStateException("PDF kann nicht gelesen werden: "+item.name);
+            byte[] buf=new byte[64*1024];int n;
+            while((n=in.read(buf))!=-1)out.write(buf,0,n);
+        }catch(Exception e){
+            tmp.delete();
+            throw e;
+        }
+        return tmp;
+    }
+
+    private void sendOne(File source,Profile p,JobOptions o,String debugExtra) throws Exception{
+        File corrected=null;
+        try{
+            File outgoing=source;
+            if(o.addressCorrection){
+                corrected=AddressCorrectionProcessor.apply(this,source,sourceSender,sourceRecipient,targetSender,targetRecipient);
+                outgoing=corrected;
+            }
+            if(DebugProfileManager.isDebug(p)){
+                StringBuilder info=new StringBuilder();
+                info.append("profile=").append(p.name).append('\n');
+                info.append("provider=debug\n");
+                info.append("sourceSender=").append(AddressCorrectionProcessor.encode(sourceSender)).append('\n');
+                info.append("sourceRecipient=").append(AddressCorrectionProcessor.encode(sourceRecipient)).append('\n');
+                info.append("targetSender=").append(AddressCorrectionProcessor.encode(targetSender)).append('\n');
+                info.append("targetRecipient=").append(AddressCorrectionProcessor.encode(targetRecipient)).append('\n');
+                if(debugExtra!=null)info.append(debugExtra);
+                DebugSender.send(this,Uri.fromFile(outgoing),o,info.toString());
+            }else{
+                ProviderSender.send(this,Uri.fromFile(outgoing),p,o);
+            }
+        }finally{
+            if(corrected!=null)corrected.delete();
+        }
     }
 
     private void send(MaterialButton button){
         Profile p=SecureStore.find(this,selectedProfileId);
         if(p==null){DebugUtil.error(this,button,"Bitte ein kompatibles Profil wählen.");return;}
-        if(merged==null||!merged.exists()){DebugUtil.error(this,button,"Die zusammengeführte PDF fehlt.");return;}
+        if(merged==null||!merged.exists()){DebugUtil.error(this,button,"Die vorbereitete PDF fehlt.");return;}
         JobOptions o=currentOptions();
 
-        boolean doCorrection=localCorrection.isChecked();
-        if(doCorrection&&!addressEdited){
+        if(o.addressCorrection&&!addressEdited){
             DebugUtil.error(this,button,"Öffne zuerst die große Adressvorschau und bestätige Original- und Zielbereiche.");
             return;
         }
-        if(addressPreview.hasCollision()&&!doCorrection){
-            DebugUtil.error(this,button,"Adresslayout kollidiert mit einem reservierten Bereich. Korrigiere die Position vor dem Versand.");
+        if(addressPreview.hasCollision()&&!o.addressCorrection){
+            DebugUtil.error(this,button,"Adresslayout kollidiert mit Sichtfenster oder Portobereich. Prüfe die Adresskorrektur vor dem Versand.");
             return;
         }
 
-        button.setEnabled(false);button.setText("Wird versendet…");
-        File source=merged;
-        List<OutboxItem> sentItems=new ArrayList<>(working);
+        button.setEnabled(false);
+        button.setText("Wird versendet…");
+
         PreparedJob preparedAtSend=editingPrepared;
+        List<OutboxItem> sentItems=new ArrayList<>(working);
+        boolean combine=mergeAsOne();
+
         new Thread(()->{
-            File corrected=null;
+            File separated=null;
             try{
-                File outgoing=source;
-                if(doCorrection){
-                    corrected=AddressCorrectionProcessor.apply(this,source,sourceSender,sourceRecipient,targetSender,targetRecipient);
-                    outgoing=corrected;
-                }
-                if(DebugProfileManager.isDebug(p)){
-                    StringBuilder debugInfo=new StringBuilder();
-                    debugInfo.append("profile=").append(p.name).append('\n');
-                    debugInfo.append("provider=debug\n");
-                    debugInfo.append("pdfCount=").append(sentItems.size()).append('\n');
-                    debugInfo.append("pageCount=").append(PdfMergeUtil.countPages(outgoing)).append('\n');
-                    debugInfo.append("addressEdited=").append(addressEdited).append('\n');
-                    debugInfo.append("sourceSender=").append(AddressCorrectionProcessor.encode(sourceSender)).append('\n');
-                    debugInfo.append("sourceRecipient=").append(AddressCorrectionProcessor.encode(sourceRecipient)).append('\n');
-                    debugInfo.append("targetSender=").append(AddressCorrectionProcessor.encode(targetSender)).append('\n');
-                    debugInfo.append("targetRecipient=").append(AddressCorrectionProcessor.encode(targetRecipient)).append('\n');
-                    for(int i=0;i<sentItems.size();i++)
-                        debugInfo.append("input[").append(i).append("]=").append(sentItems.get(i).name).append('\n');
-                    DebugSender.send(this,Uri.fromFile(outgoing),o,debugInfo.toString());
-                }else{
-                    ProviderSender.send(this,Uri.fromFile(outgoing),p,o);
-                }
                 int deleteFailures=0;
+
                 if(preparedAtSend!=null){
+                    sendOne(merged,p,o,"preparedJob="+preparedAtSend.id+"\n");
                     if(!DebugProfileManager.isDebug(p)){
                         deleteFailures=deletePreparedSources(preparedAtSend);
                         PreparedJobStore.delete(this,preparedAtSend.id);
                     }
-                }else if(!DebugProfileManager.isDebug(p)){
-                    deleteFailures=OutboxStore.removeSent(this,sentItems);
+                }else if(!combine&&sentItems.size()>1){
+                    int index=0;
+                    for(OutboxItem item:sentItems){
+                        File tmp=copyUriToTemp(item);
+                        try{
+                            sendOne(tmp,p,o,"input["+index+"]="+item.name+"\nindividual=true\n");
+                        }finally{
+                            tmp.delete();
+                        }
+                        if(!DebugProfileManager.isDebug(p)){
+                            deleteFailures+=OutboxStore.removeSent(this,java.util.Collections.singletonList(item));
+                        }
+                        index++;
+                    }
+                }else{
+                    File source=merged;
+                    if(sentItems.size()>1&&o.duplex){
+                        separated=PdfMergeUtil.merge(this,sentItems,true);
+                        source=separated;
+                    }
+                    StringBuilder extra=new StringBuilder();
+                    extra.append("combined=").append(sentItems.size()>1).append('\n');
+                    for(int i=0;i<sentItems.size();i++)extra.append("input[").append(i).append("]=").append(sentItems.get(i).name).append('\n');
+                    sendOne(source,p,o,extra.toString());
+                    if(!DebugProfileManager.isDebug(p)){
+                        deleteFailures=OutboxStore.removeSent(this,sentItems);
+                    }
                 }
-                File finalCorrected=corrected;
-                final int finalDeleteFailures=deleteFailures;
+
+                int finalDeleteFailures=deleteFailures;
                 runOnUiThread(()->{
-                    if(finalCorrected!=null)finalCorrected.delete();
-                    Snackbar.make(button,finalDeleteFailures==0?"Versand erfolgreich übergeben.":"Versand erfolgreich. Einige Auto-Import-Dateien konnten nicht gelöscht werden und werden nicht erneut importiert.",Snackbar.LENGTH_LONG).show();
-                    selectedIds.clear();working.clear();
+                    Snackbar.make(button,finalDeleteFailures==0?"Versand erfolgreich übergeben.":"Versand erfolgreich. Einige Quelldateien konnten nicht gelöscht werden.",Snackbar.LENGTH_LONG).show();
+                    selectedIds.clear();
+                    working.clear();
                     if(preparedAtSend!=null){finish();return;}
                     step=1;
                     if(merged!=null){merged.delete();merged=null;}
                     refreshItems();
                 });
             }catch(Exception e){
-                if(corrected!=null)corrected.delete();
-                runOnUiThread(()->{button.setEnabled(true);button.setText("Erneut versenden");DebugUtil.error(this,button,"Versand",e);});
+                runOnUiThread(()->{
+                    button.setEnabled(true);
+                    button.setText("Erneut versenden");
+                    DebugUtil.error(this,button,"Versand",e);
+                });
+            }finally{
+                if(separated!=null)separated.delete();
             }
         },"outbox-send").start();
     }
