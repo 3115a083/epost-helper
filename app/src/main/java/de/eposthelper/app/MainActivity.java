@@ -130,7 +130,7 @@ public class MainActivity extends AppCompatActivity {
 
         nav=new LinearLayout(this);nav.setGravity(Gravity.CENTER);nav.setPadding(UiKit.dp(this,8),UiKit.dp(this,5),UiKit.dp(this,8),UiKit.dp(this,8));
         String[] labels={"Start","Drucken","Ausgang","Einstellungen"};
-        int[] icons={R.drawable.ic_nav_home,R.drawable.ic_nav_print,R.drawable.ic_nav_outbox,R.drawable.ic_nav_settings};
+        int[] icons={R.drawable.ic_nav_home,R.drawable.ic_nav_print,R.drawable.ic_nav_cart,R.drawable.ic_nav_settings};
         for(int i=0;i<labels.length;i++){
             final int tab=i;
             LinearLayout item=new LinearLayout(this);item.setOrientation(LinearLayout.VERTICAL);item.setGravity(Gravity.CENTER);
