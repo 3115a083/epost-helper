@@ -27,6 +27,7 @@ public final class PreparedJob {
     public String sourceUri="";
     public boolean deleteSourceAfterSend=false;
     public final List<String> inputNames=new ArrayList<>();
+    public final List<String> sourceUris=new ArrayList<>();
 
     public JobOptions options(){
         JobOptions o=new JobOptions();
@@ -45,6 +46,7 @@ public final class PreparedJob {
         o.put("targetRecipient",AddressCorrectionProcessor.encode(targetRecipient));
         o.put("recipientKey",recipientKey);o.put("createdAt",createdAt);o.put("sourceUri",sourceUri);o.put("deleteSourceAfterSend",deleteSourceAfterSend);
         JSONArray a=new JSONArray();for(String n:inputNames)a.put(n);o.put("inputNames",a);
+        JSONArray u=new JSONArray();for(String n:sourceUris)u.put(n);o.put("sourceUris",u);
         return o;
     }
 
@@ -60,6 +62,7 @@ public final class PreparedJob {
         j.targetRecipient=AddressCorrectionProcessor.decode(o.optString("targetRecipient",""));
         j.recipientKey=o.optString("recipientKey","");j.createdAt=o.optLong("createdAt",System.currentTimeMillis());j.sourceUri=o.optString("sourceUri","");j.deleteSourceAfterSend=o.optBoolean("deleteSourceAfterSend",false);
         JSONArray a=o.optJSONArray("inputNames");if(a!=null)for(int i=0;i<a.length();i++)j.inputNames.add(a.optString(i));
+        JSONArray u=o.optJSONArray("sourceUris");if(u!=null)for(int i=0;i<u.length();i++)j.sourceUris.add(u.optString(i));
         return j;
     }
 }
