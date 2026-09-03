@@ -54,7 +54,7 @@ public class OutboxActivity extends AppCompatActivity {
     private Bitmap orderPreviewBitmap;
 
     private String selectedProfileId;
-    private MaterialSwitch color,duplex,localCorrection,c4;
+    private MaterialSwitch color,duplex,localCorrection,c4,mergeLetters;
     private Spinner registered,shipping;
     private PreparedJob editingPrepared;
     private AddressConfigView addressPreview;
