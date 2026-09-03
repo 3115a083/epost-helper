@@ -28,13 +28,13 @@ The implementation follows Deutsche Post's E-POST MAILER 7.0 user manual, versio
 - **Sammelkorb:** WebDAV target using the administrator-provided URL and optional username/password. The connection test performs a WebDAV probe and reads `Info.txt` for the configured shipping options and `README.txt` for collection-basket instructions/series-letter separator when available.
 - **Netzwerkdrucker:** secure IPP request to the administrator-provided printer URL. The connection test performs an IPP Get-Printer-Attributes request before a profile is used.
 - **Shipping options:** colour, simplex/duplex and registered-mail variants are properties of the configured E-POST target. Local profile labels are selection aids; they do not pretend to override server configuration.
-- **Address correction:** E-POST MAILER 7.0 uses its address repositioning tool and saved correction templates. E-POST Helper therefore does not apply arbitrary local X/Y offsets to PDFs.
+- **Address correction:** profiles can mark a Deutsche-Post target as already applying server-side correction. Independently, the app can perform an optional local sender/recipient relocation before submission. The preview overlays the documented window and DV-franking area so local correction is not applied blindly.
 
 ## E-POST configuration model
 
 E-POST MAILER 7.0 documents the Sammelkorb as a WebDAV folder and the network printer as an IPP printer. Versandoptionen such as duplex, colour, registered mail and address-window repositioning belong to the E-POST target configured by the administrator. E-POST Helper maps one local profile to one such server-side target.
 
-The optional address-window fields in the Android profile are therefore identification/documentation values. The app deliberately does not rasterize or rewrite arbitrary PDFs because that can reduce print quality or change document content. Configure the effective sender/recipient repositioning on the corresponding E-POST target.
+The optional address-window fields identify the sender and recipient source regions of the user's layout. If local correction is enabled, only these two regions on page 1 are rendered and moved; the rest of the PDF remains unchanged. A Deutsche-Post profile can instead be marked as already corrected by its server-side target.
 
 ## Build
 
@@ -114,7 +114,7 @@ E-POST MAILER 7.0 documents its Journal only inside the Post & DHL business cust
 
 Each active profile appears as a printer. Android's advanced print options activity is used for per-document provider settings instead of creating a separate virtual printer for every option combination. Currently implemented per-job options are simplex/duplex, colour, supported registered-mail modes and LetterXpress C4. LetterXpress API profiles can show a provider price quote; SFTP profiles show a public-list-price estimate.
 
-The PDF address helper stores sender and recipient source areas for the user's layout. Automatic PDF repositioning is intentionally not enabled yet, so the UI does not claim that stored address regions are already applied to outgoing documents.
+The PDF address helper stores sender and recipient source areas for the user's layout. When local correction is enabled, the same confirmed target rectangles shown in the preview are applied to the outgoing PDF before transport.
 
 
 ## Backup and migration
