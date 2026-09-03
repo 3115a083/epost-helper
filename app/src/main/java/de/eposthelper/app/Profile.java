@@ -34,6 +34,7 @@ public final class Profile {
     public String recipientWindow="";
     public String senderWindow="";
     public boolean showBalanceOnHome=false;
+    public boolean includeServerHistoryInStats=false;
     public boolean connectionVerified=false;
     public long connectionVerifiedAt=0L;
     public String lastConnectionMessage="";
@@ -58,6 +59,7 @@ public final class Profile {
         o.put("recipientWindow",recipientWindow);
         o.put("senderWindow",senderWindow);
         o.put("showBalanceOnHome",showBalanceOnHome);
+        o.put("includeServerHistoryInStats",includeServerHistoryInStats);
         o.put("connectionVerified",connectionVerified);
         o.put("connectionVerifiedAt",connectionVerifiedAt);
         o.put("lastConnectionMessage",lastConnectionMessage);
@@ -86,6 +88,7 @@ public final class Profile {
         p.recipientWindow=o.optString("recipientWindow","");
         p.senderWindow=o.optString("senderWindow","");
         p.showBalanceOnHome=o.optBoolean("showBalanceOnHome",false);
+        p.includeServerHistoryInStats=o.optBoolean("includeServerHistoryInStats",false);
         p.connectionVerified=o.optBoolean("connectionVerified",false);
         p.connectionVerifiedAt=o.optLong("connectionVerifiedAt",0L);
         p.lastConnectionMessage=o.optString("lastConnectionMessage","");
