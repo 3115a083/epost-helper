@@ -40,9 +40,18 @@ public final class AutoFolderPresets {
         if(uri==null||uri.isBlank())return 0;
         DocumentFile root=DocumentFile.fromTreeUri(c,Uri.parse(uri));
         if(root==null||!root.canWrite())return 0;
+        java.util.HashSet<String> existing=new java.util.HashSet<>();
+        for(DocumentFile f:root.listFiles()){
+            if(f.isDirectory()&&f.getName()!=null)existing.add(f.getName().toLowerCase(Locale.ROOT));
+        }
         int created=0;
         for(String name:presetNames()){
-            if(findDir(root,name)==null&&root.createDirectory(name)!=null)created++;
+            String key=name.toLowerCase(Locale.ROOT);
+            if(existing.contains(key))continue;
+            if(root.createDirectory(name)!=null){
+                existing.add(key);
+                created++;
+            }
         }
         return created;
     }
