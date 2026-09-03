@@ -544,17 +544,7 @@ public class OutboxActivity extends AppCompatActivity {
     }
 
     private boolean compatible(Profile p,JobOptions o){
-        if(!p.active)return false;
-        if(DebugProfileManager.isDebug(p))return true;
-        if(Profile.PROVIDER_POST.equals(p.provider)){
-            if(o.c4)return false;
-            if(p.color!=o.color||p.duplex!=o.duplex)return false;
-            String pr=p.registeredMail==null?"Nein":p.registeredMail;
-            if(!pr.equals(o.registered))return false;
-            return true;
-        }
-        if("Einschreiben Rückschein".equals(o.registered))return false;
-        return true;
+        return ProfileCompatibility.compatible(p,o);
     }
 
     private void refreshProfiles(){
