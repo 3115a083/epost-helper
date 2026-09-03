@@ -820,6 +820,7 @@ public class OutboxActivity extends AppCompatActivity {
                         PreparedJobStore.upsert(this,j);
                         created++;
                     }
+                    OutboxStore.removeQueued(this,new ArrayList<>(working));
                     int finalCreated=created;
                     runOnUiThread(()->{
                         button.setEnabled(true);
@@ -847,6 +848,7 @@ public class OutboxActivity extends AppCompatActivity {
                 RectF keyArea=sourceRecipient.isEmpty()?AddressCorrectionProcessor.decode(p.recipientWindow):sourceRecipient;
                 j.recipientKey=AddressTextExtractor.recipientKey(this,persisted,keyArea);
                 PreparedJobStore.upsert(this,j);
+                OutboxStore.removeQueued(this,new ArrayList<>(working));
                 editingPrepared=j;
 
                 runOnUiThread(()->{
