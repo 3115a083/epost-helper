@@ -290,8 +290,9 @@ public class MainActivity extends AppCompatActivity {
                 String balance="";
                 Profile balanceApi=firstBalanceApi(SecureStore.load(this));
                 if(balanceApi!=null)balance=LetterXpressApiClient.balance(balanceApi);
+                final String loadedBalance=balance;
                 runOnUiThread(()->{
-                    historyLoading=false;recentLoaded=true;recentCache=jobs;balanceCache=balance;
+                    historyLoading=false;recentLoaded=true;recentCache=jobs;balanceCache=loadedBalance;
                     if(currentTab==0){render();}
                 });
             }catch(Exception e){
