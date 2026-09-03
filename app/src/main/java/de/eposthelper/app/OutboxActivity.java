@@ -660,7 +660,7 @@ public class OutboxActivity extends AppCompatActivity {
 
             String routeText=DebugProfileManager.isDebug(p)?"Lokale Debug-Ausgabe":
                     Profile.PROVIDER_LETTERXPRESS.equals(p.provider)?"LetterXpress · "+(Profile.TYPE_LXP_API.equals(p.type)?"API":"SFTP"):
-                            "Deutsche Post · "+(Profile.TYPE_IPP.equals(p.type)?"IPP":"WebDAV");
+                            "Deutsche Post · WebDAV";
             TextView route=UiKit.body(this,routeText);
             route.setTextSize(12);route.setPadding(UiKit.dp(this,48),0,0,0);card.addView(route);
             TextView price=UiKit.body(this,"Kosten werden ermittelt…");price.setPadding(UiKit.dp(this,48),UiKit.dp(this,4),0,0);card.addView(price);

@@ -811,7 +811,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private String profileSummary(Profile p){
-        String route=Profile.TYPE_IPP.equals(p.type)?"IPP":Profile.TYPE_WEBDAV.equals(p.type)?"WebDAV":Profile.TYPE_LXP_API.equals(p.type)?"API":"SFTP";
+        String route=Profile.PROVIDER_POST.equals(p.provider)?"WebDAV":Profile.TYPE_LXP_API.equals(p.type)?"API":"SFTP";
         return (Profile.PROVIDER_LETTERXPRESS.equals(p.provider)?"LetterXpress":"Deutsche Post")+" · "+route;
     }
 

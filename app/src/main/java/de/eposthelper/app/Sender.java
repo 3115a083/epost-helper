@@ -59,8 +59,9 @@ public final class Sender {
         validatePdf(context,pdf);
         String secure=normalizeSecureUrl(profile.url);
         OkHttpClient client=NetworkClientFactory.create(profile);
-        if(Profile.TYPE_IPP.equals(profile.type))sendIpp(context,client,secure,pdf,profile);
-        else sendWebDav(context,client,secure,pdf,profile);
+        if(Profile.TYPE_IPP.equals(profile.type))
+            throw new IllegalStateException("Direkter E-POST Netzwerkdrucker-Versand wird nicht unterstützt. Bitte ein Sammelkorb/WebDAV-Profil verwenden.");
+        sendWebDav(context,client,secure,pdf,profile);
     }
 
     private static Request.Builder auth(Request.Builder rb,Profile p){
@@ -70,7 +71,10 @@ public final class Sender {
     }
 
     private static void sendWebDav(Context context,OkHttpClient client,String url,Uri pdf,Profile p) throws Exception{
-        String base=url.endsWith("/")?url:url+"/";
+        String collection=p.webDavCollection==null?"":p.webDavCollection.trim().replaceAll("^/+|/+$","");
+        if(collection.isBlank())
+            throw new IllegalStateException("Kein Sammelkorb ausgewählt. Das E-POST WebDAV-Hauptverzeichnis ist nicht beschreibbar.");
+        String base=(url.endsWith("/")?url:url+"/")+okhttp3.HttpUrl.Builder.Companion.toPathSegment(collection)+"/";
         String name="epost-helper-"+System.currentTimeMillis()+"-"+UUID.randomUUID().toString().substring(0,8)+".pdf";
         Request req=auth(new Request.Builder().url(base+name),p)
                 .put(pdfBody(context,pdf,PDF,null))

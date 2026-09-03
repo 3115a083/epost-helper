@@ -26,7 +26,8 @@ import java.util.List;
 public class ProfileEditActivity extends AppCompatActivity {
     private Profile profile;
     private EditText name,url,user,secret,pin,sshKey;
-    private Spinner provider,type,registered;
+    private Spinner provider,type,registered,webDavCollection;
+    private MaterialButton loadCollections;
     private MaterialSwitch active,duplex,color,remoteAddressCorrection,showBalance,serverStats;
     private LinearLayout credentials,balanceCard;
     private TextView routeHelp;
@@ -127,6 +128,11 @@ public class ProfileEditActivity extends AppCompatActivity {
         connection.addView(routeHelp);
         url=field("Ziel-URL",profile.url,false);
         addField(connection,url);
+        webDavCollection=new Spinner(this);
+        connection.addView(webDavCollection,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,54)));
+        loadCollections=UiKit.tonal(this,"Sammelkörbe laden");
+        loadCollections.setOnClickListener(v->loadWebDavCollections(loadCollections));
+        connection.addView(loadCollections,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,48)));
         root.addView(UiKit.surfaceCard(this,connection));
 
         credentials=cardBody("Zugangsdaten","");
@@ -236,37 +242,72 @@ public class ProfileEditActivity extends AppCompatActivity {
 
         String[] types=lxp
                 ?new String[]{"LetterXpress API","LetterXpress SFTP"}
-                :new String[]{"Sammelkorb / WebDAV","Netzwerkdrucker / IPP"};
+                :new String[]{"Sammelkorb / WebDAV"};
 
-        boolean adapterMatches=type.getAdapter()!=null&&type.getCount()==2&&
+        boolean adapterMatches=type.getAdapter()!=null&&type.getCount()==(lxp?2:1)&&
                 (((String)type.getItemAtPosition(0)).startsWith("LetterXpress"))==lxp;
         if(!adapterMatches){
             type.setAdapter(new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,types));
             int idx=0;
             if(lxp&&Profile.TYPE_LXP_SFTP.equals(profile.type))idx=1;
-            if(!lxp&&Profile.TYPE_IPP.equals(profile.type))idx=1;
             type.setSelection(idx);
         }
 
         int route=type.getSelectedItemPosition();
         boolean api=lxp&&route==0;
         boolean sftp=lxp&&route==1;
-        boolean ipp=!lxp&&route==1;
-
         balanceCard.setVisibility(api?View.VISIBLE:View.GONE);
         url.setVisibility(lxp?View.GONE:View.VISIBLE);
-        if(!lxp)url.setHint(ipp?"IPPS-/HTTPS-Drucker-URL":"WebDAV-HTTPS-URL");
-        user.setHint(api?"LetterXpress Benutzername":sftp?"SFTP Benutzername":ipp?"Optionaler IPP-Benutzername":"WebDAV Benutzername");
-        secret.setHint(api?"LetterXpress API-Key":sftp?"SFTP Passwort":"WebDAV Passwort");
-        secret.setVisibility(ipp?View.GONE:View.VISIBLE);
+        if(!lxp)url.setHint("WebDAV-Basis-URL, z. B. https://mailer-webdav.epost.de/…");
+        user.setHint(api?"LetterXpress Benutzername":sftp?"SFTP Benutzername":"Geschäftskundenportal-Benutzername");
+        secret.setHint(api?"LetterXpress API-Key":sftp?"SFTP Passwort":"Geschäftskundenportal-Passwort");
+        secret.setVisibility(View.VISIBLE);
+        webDavCollection.setVisibility(lxp?View.GONE:View.VISIBLE);
+        loadCollections.setVisibility(lxp?View.GONE:View.VISIBLE);
         remoteAddressCorrection.setVisibility(lxp?View.GONE:View.VISIBLE);
         pin.setVisibility(sftp?View.GONE:View.VISIBLE);
         sshKey.setVisibility(sftp?View.VISIBLE:View.GONE);
 
         routeHelp.setText(api?"REST API v3. Unterstützt Preisabfrage, Guthaben und Testmodus."
                 :sftp?"SFTP/SSH auf sftp.letterxpress.de:279. Versandoptionen werden per FILECODE übertragen."
-                :ipp?"Automatischer E-POST-Netzwerkdrucker."
-                :"E-POST Sammelkorb über WebDAV.");
+                :"E-POST Sammelkorb über WebDAV. Basis-URL, normalen Geschäftskundenportal-Benutzernamen und Passwort eintragen. Danach Sammelkörbe laden und einen beschreibbaren Unterordner auswählen. Netzwerkdrucker werden laut Deutsche Post ausschließlich über die StarterApp eingerichtet.");
+        if(!lxp&&webDavCollection.getAdapter()==null){
+            List<String> initial=new ArrayList<>();
+            if(profile.webDavCollection!=null&&!profile.webDavCollection.isBlank())initial.add(profile.webDavCollection);
+            else initial.add("Sammelkorb auswählen");
+            webDavCollection.setAdapter(new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,initial));
+        }
+    }
+
+    private void loadWebDavCollections(MaterialButton anchor){
+        collect();
+        if(profile.url.isBlank()){url.setError("WebDAV-Basis-URL fehlt");return;}
+        if(profile.username.isBlank()){user.setError("Benutzername fehlt");return;}
+        if(profile.password.isBlank()){secret.setError("Passwort fehlt");return;}
+        anchor.setEnabled(false);anchor.setText("Sammelkörbe werden geladen…");
+        new Thread(()->{
+            try{
+                List<String> names=ConnectionTester.webDavCollections(profile);
+                runOnUiThread(()->{
+                    anchor.setEnabled(true);anchor.setText("Sammelkörbe neu laden");
+                    if(names.isEmpty()){
+                        android.widget.Toast.makeText(this,"Keine Sammelkorb-Unterordner gefunden.",android.widget.Toast.LENGTH_LONG).show();
+                        return;
+                    }
+                    webDavCollection.setAdapter(new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,names));
+                    int selected=0;
+                    for(int i=0;i<names.size();i++)if(names.get(i).equals(profile.webDavCollection))selected=i;
+                    webDavCollection.setSelection(selected);
+                    profile.webDavCollection=names.get(selected);
+                    android.widget.Toast.makeText(this,names.size()+" Sammelkorb"+(names.size()==1?"":"-Unterordner")+" gefunden.",android.widget.Toast.LENGTH_LONG).show();
+                });
+            }catch(Exception e){
+                runOnUiThread(()->{
+                    anchor.setEnabled(true);anchor.setText("Sammelkörbe laden");
+                    DebugUtil.error(this,anchor,"Sammelkörbe laden",e);
+                });
+            }
+        },"epost-webdav-discovery").start();
     }
 
     private String text(EditText e){
@@ -280,7 +321,7 @@ public class ProfileEditActivity extends AppCompatActivity {
         int route=type.getSelectedItemPosition();
         profile.type=lxp
                 ?(route==0?Profile.TYPE_LXP_API:Profile.TYPE_LXP_SFTP)
-                :(route==0?Profile.TYPE_WEBDAV:Profile.TYPE_IPP);
+                :Profile.TYPE_WEBDAV;
 
         profile.name=text(name);
         profile.active=active.isChecked();
@@ -288,6 +329,10 @@ public class ProfileEditActivity extends AppCompatActivity {
                 ?(Profile.TYPE_LXP_API.equals(profile.type)?"https://api.letterxpress.de/v3":"sftp://sftp.letterxpress.de:279")
                 :text(url);
         profile.username=text(user);
+        if(!lxp&&webDavCollection.getSelectedItem()!=null){
+            String selected=String.valueOf(webDavCollection.getSelectedItem());
+            profile.webDavCollection="Sammelkorb auswählen".equals(selected)?"":selected;
+        }
 
         if(Profile.TYPE_LXP_API.equals(profile.type)){
             profile.apiKey=text(secret);
@@ -383,6 +428,10 @@ public class ProfileEditActivity extends AppCompatActivity {
         collect();
         if(profile.name.isBlank()){
             name.setError("Profilname fehlt");
+            return;
+        }
+        if(Profile.PROVIDER_POST.equals(profile.provider)&&profile.webDavCollection.isBlank()){
+            android.widget.Toast.makeText(this,"Bitte zuerst einen Sammelkorb-Unterordner laden und auswählen.",android.widget.Toast.LENGTH_LONG).show();
             return;
         }
         try{

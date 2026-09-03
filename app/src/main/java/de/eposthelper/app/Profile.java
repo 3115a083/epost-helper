@@ -21,6 +21,7 @@ public final class Profile {
     public String provider=PROVIDER_POST;
     public String type=TYPE_WEBDAV;
     public String url="";
+    public String webDavCollection="";
     public String username="";
     public String password="";
     public String apiKey="";
@@ -46,6 +47,7 @@ public final class Profile {
         o.put("provider",provider);
         o.put("type",type);
         o.put("url",url);
+        o.put("webDavCollection",webDavCollection);
         o.put("username",username);
         o.put("password",password);
         o.put("apiKey",apiKey);
@@ -73,6 +75,7 @@ public final class Profile {
         p.provider=o.optString("provider",PROVIDER_POST);
         p.type=o.optString("type",TYPE_WEBDAV);
         p.url=o.optString("url","");
+        p.webDavCollection=o.optString("webDavCollection","");
         p.username=o.optString("username","");
         p.password=o.optString("password","");
         p.apiKey=o.optString("apiKey","");
