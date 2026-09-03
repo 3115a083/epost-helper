@@ -174,22 +174,23 @@ public class MainActivity extends AppCompatActivity {
         List<Profile> profiles=SecureStore.load(this);
         long connected=profiles.stream().filter(p->p.active&&p.connectionVerified&&!DebugProfileManager.isDebug(p)).count();
         int queued=OutboxStore.load(this).size();
+        int prepared=PreparedJobStore.load(this).size();
         int[] g=SettingsStore.gradient(this);
 
         LinearLayout hero=new LinearLayout(this);hero.setOrientation(LinearLayout.VERTICAL);
-        hero.addView(UiKit.heroTitle(this,queued>0?queued+" PDF"+(queued==1?" wartet":"s warten"):"Bereit zum Briefversand",24));
-        String heroText=connected==0?"Noch kein verifiziertes Versandprofil.":connected+" verifizierte"+(connected==1?"s Profil":" Profile")+" · "+(queued==0?"Druckausgang leer":"Druckausgang bereit");
+        hero.addView(UiKit.heroTitle(this,prepared>0?prepared+" vorbereitete"+(prepared==1?"r Brief":" Briefe"):(queued>0?queued+" PDF"+(queued==1?" wartet":"s warten"):"Bereit zum Briefversand"),24));
+        String heroText=connected==0?"Noch kein verifiziertes Versandprofil.":connected+" verifizierte"+(connected==1?"s Profil":" Profile")+" · "+prepared+" im Ausgang";
         hero.addView(UiKit.heroBody(this,heroText));
-        MaterialButton heroAction=UiKit.primary(this,queued>0?"Druckausgang öffnen":"PDFs hinzufügen");
+        MaterialButton heroAction=UiKit.primary(this,prepared>0?"Ausgang öffnen":(queued>0?"PDF-Eingang öffnen":"PDFs hinzufügen"));
         heroAction.setBackgroundTintList(ColorStateList.valueOf(0x33FFFFFF));
-        heroAction.setOnClickListener(v->startActivity(new Intent(this,OutboxActivity.class)));
+        heroAction.setOnClickListener(v->{if(prepared>0)navigateTo(2);else startActivity(new Intent(this,OutboxActivity.class));});
         LinearLayout.LayoutParams hap=new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,50));hap.setMargins(0,UiKit.dp(this,12),0,0);hero.addView(heroAction,hap);
         content.addView(UiKit.hero(this,hero,g[0],g[1]));
 
         LinearLayout metrics=new LinearLayout(this);metrics.setOrientation(LinearLayout.HORIZONTAL);
         metrics.addView(metric("Verbindungen",String.valueOf(connected),"verifiziert"),new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1f));
         metrics.addView(new View(this),new LinearLayout.LayoutParams(UiKit.dp(this,12),1));
-        metrics.addView(metric("Druckausgang",String.valueOf(queued),queued==1?"PDF":"PDFs"),new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1f));
+        metrics.addView(metric("Ausgang",String.valueOf(prepared),prepared==1?"Brief":"Briefe"),new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1f));
         content.addView(metrics);
 
         Profile api=firstLetterXpressApi(profiles);
@@ -303,9 +304,9 @@ public class MainActivity extends AppCompatActivity {
         int queued=OutboxStore.load(this).size();
         int[] g=SettingsStore.gradient(this);
         LinearLayout hero=new LinearLayout(this);hero.setOrientation(LinearLayout.VERTICAL);
-        hero.addView(UiKit.heroTitle(this,queued==0?"PDFs für den Versand sammeln":queued+" PDF"+(queued==1?" im Druckausgang":"s im Druckausgang"),23));
+        hero.addView(UiKit.heroTitle(this,queued==0?"PDFs für den Versand sammeln":queued+" PDF"+(queued==1?" im PDF-Eingang":"s im PDF-Eingang"),23));
         hero.addView(UiKit.heroBody(this,"Auswählen, zusammenführen, Vorschau prüfen, Versandoptionen festlegen und Profilkosten vergleichen."));
-        MaterialButton open=UiKit.primary(this,queued==0?"PDFs hinzufügen":"Druckausgang bearbeiten");
+        MaterialButton open=UiKit.primary(this,queued==0?"PDFs hinzufügen":"PDF-Eingang bearbeiten");
         open.setBackgroundTintList(ColorStateList.valueOf(0x33FFFFFF));
         open.setOnClickListener(v->startActivity(new Intent(this,OutboxActivity.class)));
         LinearLayout.LayoutParams op=new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,52));op.setMargins(0,UiKit.dp(this,12),0,0);hero.addView(open,op);
