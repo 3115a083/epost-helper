@@ -20,5 +20,6 @@ public final class ProviderSender {
             copy.duplex=o.duplex;copy.color=o.color;copy.registeredMail=o.registered;
             Sender.send(c,pdf,copy);
         }
+        SendStatsStore.record(c,p,pdf,o);
     }
 }
