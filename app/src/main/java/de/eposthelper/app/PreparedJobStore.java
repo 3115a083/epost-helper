@@ -43,6 +43,19 @@ public final class PreparedJobStore {
         if(!found)jobs.add(job);save(c,jobs);
     }
 
+    public static File persistUri(Context c,android.net.Uri uri,String id) throws Exception{
+        File dir=new File(c.getFilesDir(),"prepared");
+        if(!dir.exists()&&!dir.mkdirs())throw new IllegalStateException("Ausgangsordner konnte nicht erstellt werden");
+        File dest=new File(dir,id+".pdf");
+        try(java.io.InputStream in=c.getContentResolver().openInputStream(uri);
+            FileOutputStream out=new FileOutputStream(dest)){
+            if(in==null)throw new IllegalStateException("PDF kann nicht gelesen werden");
+            byte[] buf=new byte[64*1024];int n;
+            while((n=in.read(buf))!=-1)out.write(buf,0,n);
+        }
+        return dest;
+    }
+
     public static File persistPdf(Context c,File source,String id) throws Exception{
         File dir=new File(c.getFilesDir(),"prepared");if(!dir.exists()&&!dir.mkdirs())throw new IllegalStateException("Ausgangsordner konnte nicht erstellt werden");
         File dest=new File(dir,id+".pdf");
