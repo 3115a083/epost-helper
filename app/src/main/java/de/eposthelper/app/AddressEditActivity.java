@@ -107,7 +107,7 @@ public class AddressEditActivity extends AppCompatActivity {
         modes.setSingleSelection(true);
         modes.setSelectionRequired(true);
 
-        MaterialButton source=UiKit.tonal(this,"1 · Originalbereiche");
+        MaterialButton source=UiKit.tonal(this,"1 · Bereich auswählen");
         source.setId(View.generateViewId());
         source.setTextColor(UiKit.resolveText(this));
 
@@ -165,6 +165,9 @@ public class AddressEditActivity extends AppCompatActivity {
             }
             updateHint();
         });
+        preview.setOnInteractionFinished(()->{
+            if(!sourceMode)renderTargetPreview();
+        });
 
         int availableWidth=getResources().getDisplayMetrics().widthPixels-UiKit.dp(this,24);
         float cropRatio=(EDIT_VIEWPORT.height()*297f)/(EDIT_VIEWPORT.width()*210f);
@@ -209,15 +212,15 @@ public class AddressEditActivity extends AppCompatActivity {
             preview.setWindowArea(null,null);
             preview.setRecipientSafetyArea(null,null);
             if(snap.isChecked())snap.setChecked(false);
+            renderSourcePreview();
         }else{
             preview.setBoxes(targetSender,targetRecipient);
             RectF window=profile==null?new RectF():AddressLayoutRules.window(profile,options);
             RectF postage=profile==null?new RectF():AddressLayoutRules.postage(profile,options);
-            RectF allowedRecipient=profile==null?new RectF():AddressLayoutRules.targetRecipient(profile,options);
-            RectF overflow=AddressLayoutRules.recipientOverflow(targetRecipient,allowedRecipient);
             preview.setWindowArea(window,window.isEmpty()?null:"Brief-Sichtfenster");
             preview.setReservedArea(postage,postage.isEmpty()?null:"Porto / DV-Freimachung");
-            preview.setRecipientSafetyArea(overflow,overflow.isEmpty()?null:"Adressanteil außerhalb Sollfeld");
+            preview.setRecipientSafetyArea(null,null);
+            renderTargetPreview();
         }
         updateHint();
     }
@@ -230,42 +233,64 @@ public class AddressEditActivity extends AppCompatActivity {
         }else if(preview!=null&&preview.hasWindowClip()){
             hint.setText("Rot: Ein Teil des verschobenen Adressbereichs liegt außerhalb des Brief-Sichtfensters und könnte im Umschlag abgeschnitten werden.");
         }else{
-            RectF allowed=profile==null?new RectF():AddressLayoutRules.targetRecipient(profile,options);
-            RectF overflow=AddressLayoutRules.recipientOverflow(targetRecipient,allowed);
-            hint.setText(overflow.isEmpty()
-                    ?"Zielposition passt in Sichtfenster und Portobereich. Die Rahmen zeigen die Position, die tatsächlich in die ausgegebene PDF geschrieben wird."
-                    :"Violett: Dieser untere Teil entsteht, weil das ursprüngliche Empfängerfeld höher als der vorgesehene Zielbereich ist. Er bleibt sichtbar, solange er noch innerhalb des Brief-Sichtfensters liegt.");
+            hint.setText("Die Vorschau zeigt die tatsächlich verschobenen Adressfelder in der PDF. Türkis markiert das Sichtfenster, Orange den Porto-/DV-Bereich. Rot bedeutet, dass die gewählte Zielposition abgeschnitten würde oder mit dem Portobereich kollidiert.");
         }
     }
 
-    private void loadPdf(){
+    private File sourceFile(){
         String path=getIntent().getStringExtra(EXTRA_FILE);
-        if(path==null||path.isBlank()){
-            previewStatus.setText("PDF-Datei fehlt.");
-            return;
-        }
+        return path==null?null:new File(path);
+    }
 
-        File file=new File(path);
-        if(!file.exists()||!file.canRead()){
+    private void loadPdf(){
+        File file=sourceFile();
+        if(file==null||!file.exists()||!file.canRead()){
             previewStatus.setText("PDF-Datei ist nicht mehr verfügbar.");
             return;
         }
+        applyMode();
+    }
 
+    private void renderSourcePreview(){
+        File file=sourceFile();
+        if(file==null||!file.exists())return;
+        previewStatus.setText("Original wird geladen…");
         new Thread(()->{
             try{
                 Bitmap bitmap=PdfPreviewRenderer.renderFirstPage(file,1400,PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
                 runOnUiThread(()->{
+                    if(!sourceMode){if(!bitmap.isRecycled())bitmap.recycle();return;}
                     preview.setBitmap(bitmap);
-                    previewStatus.setText("Adressbereich · Seite 1");
-                    applyMode();
+                    previewStatus.setText("Original · Seite 1");
                 });
             }catch(Exception e){
-                runOnUiThread(()->{
-                    previewStatus.setText("PDF konnte nicht angezeigt werden.");
-                    DebugUtil.error(this,preview,"PDF-Vorschau",e);
-                });
+                runOnUiThread(()->{previewStatus.setText("PDF konnte nicht angezeigt werden.");DebugUtil.error(this,preview,"PDF-Vorschau",e);});
             }
-        },"address-crop-preview").start();
+        },"address-source-preview").start();
+    }
+
+    private void renderTargetPreview(){
+        File file=sourceFile();
+        if(file==null||!file.exists())return;
+        final RectF ss=new RectF(sourceSender),sr=new RectF(sourceRecipient),ts=new RectF(targetSender),tr=new RectF(targetRecipient);
+        previewStatus.setText("Zielposition wird erzeugt…");
+        new Thread(()->{
+            File corrected=null;
+            try{
+                corrected=AddressCorrectionProcessor.apply(this,file,ss,sr,ts,tr);
+                Bitmap bitmap=PdfPreviewRenderer.renderFirstPage(corrected,1400,PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
+                if(corrected!=null)corrected.delete();
+                runOnUiThread(()->{
+                    if(sourceMode){if(!bitmap.isRecycled())bitmap.recycle();return;}
+                    preview.setBitmap(bitmap);
+                    preview.setBoxes(ts,tr);
+                    previewStatus.setText("Zielposition · tatsächliche PDF-Ausgabe");
+                });
+            }catch(Exception e){
+                if(corrected!=null)corrected.delete();
+                runOnUiThread(()->{previewStatus.setText("Zielvorschau konnte nicht erzeugt werden.");DebugUtil.error(this,preview,"Adress-Zielvorschau",e);});
+            }
+        },"address-target-preview").start();
     }
 
     private void save(){
