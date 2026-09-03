@@ -74,7 +74,9 @@ public final class Sender {
         String collection=p.webDavCollection==null?"":p.webDavCollection.trim().replaceAll("^/+|/+$","");
         if(collection.isBlank())
             throw new IllegalStateException("Kein Sammelkorb ausgewählt. Das E-POST WebDAV-Hauptverzeichnis ist nicht beschreibbar.");
-        String base=(url.endsWith("/")?url:url+"/")+okhttp3.HttpUrl.Builder.Companion.toPathSegment(collection)+"/";
+        String root=url.endsWith("/")?url:url+"/";
+        okhttp3.HttpUrl rootUrl=okhttp3.HttpUrl.get(root);
+        String base=rootUrl.newBuilder().addPathSegment(collection).addPathSegment("").build().toString();
         String name="epost-helper-"+System.currentTimeMillis()+"-"+UUID.randomUUID().toString().substring(0,8)+".pdf";
         Request req=auth(new Request.Builder().url(base+name),p)
                 .put(pdfBody(context,pdf,PDF,null))
