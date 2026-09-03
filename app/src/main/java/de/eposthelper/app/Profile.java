@@ -33,11 +33,9 @@ public final class Profile {
     public String recipientWindow="";
     public String senderWindow="";
     public boolean showBalanceOnHome=true;
-    public boolean showBalance=false;
     public boolean connectionVerified=false;
     public long connectionVerifiedAt=0L;
     public String lastConnectionMessage="";
-    public boolean showBalanceOnHome=true;
 
     public JSONObject toJson() throws JSONException{
         JSONObject o=new JSONObject();
@@ -47,7 +45,7 @@ public final class Profile {
         o.put("active",active);o.put("duplex",duplex);o.put("color",color);o.put("registeredMail",registeredMail);
         o.put("addressCorrection",addressCorrection);o.put("recipientWindow",recipientWindow);o.put("senderWindow",senderWindow);
         o.put("showBalanceOnHome",showBalanceOnHome);
-        o.put("showBalance",showBalance);o.put("connectionVerified",connectionVerified);o.put("connectionVerifiedAt",connectionVerifiedAt);o.put("lastConnectionMessage",lastConnectionMessage);o.put("showBalanceOnHome",showBalanceOnHome);
+        o.put("connectionVerified",connectionVerified);o.put("connectionVerifiedAt",connectionVerifiedAt);o.put("lastConnectionMessage",lastConnectionMessage);
         return o;
     }
 
@@ -72,12 +70,10 @@ public final class Profile {
         p.addressCorrection=o.optBoolean("addressCorrection",false);
         p.recipientWindow=o.optString("recipientWindow","");
         p.senderWindow=o.optString("senderWindow","");
-        p.showBalanceOnHome=o.optBoolean("showBalanceOnHome",true);
-        p.showBalance=o.optBoolean("showBalance",false);
+        p.showBalanceOnHome=o.has("showBalanceOnHome")?o.optBoolean("showBalanceOnHome",true):o.optBoolean("showBalance",true);
         p.connectionVerified=o.optBoolean("connectionVerified",false);
         p.connectionVerifiedAt=o.optLong("connectionVerifiedAt",0L);
         p.lastConnectionMessage=o.optString("lastConnectionMessage","");
-        p.showBalanceOnHome=o.optBoolean("showBalanceOnHome",true);
         return p;
     }
 }
