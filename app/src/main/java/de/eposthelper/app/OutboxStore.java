@@ -116,6 +116,13 @@ public final class OutboxStore {
         return f.getName()==null?"PDF":f.getName();
     }
 
+    public static void reconcilePrepared(Context c){
+        List<OutboxItem> all=load(c);
+        int before=all.size();
+        all.removeIf(i->PreparedJobStore.hasSourceUri(c,i.uri));
+        if(all.size()!=before)save(c,all);
+    }
+
     public static void removeQueued(Context c,List<OutboxItem> items){
         if(items==null||items.isEmpty())return;
         java.util.HashSet<String> ids=new java.util.HashSet<>();
