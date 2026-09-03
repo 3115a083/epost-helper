@@ -39,6 +39,7 @@ import java.util.List;
 import java.util.Set;
 
 public class OutboxActivity extends AppCompatActivity {
+    public static final String EXTRA_PREPARED_ID="preparedId";
     private LinearLayout root;
     private int step=1;
     private final Set<String> selectedIds=new HashSet<>();
@@ -54,7 +55,8 @@ public class OutboxActivity extends AppCompatActivity {
 
     private String selectedProfileId;
     private MaterialSwitch color,duplex,localCorrection,c4;
-    private Spinner registered;
+    private Spinner registered,shipping;
+    private PreparedJob editingPrepared;
     private AddressConfigView addressPreview;
     private TextView layoutHint;
     private RadioGroup profileGroup;
@@ -103,12 +105,32 @@ public class OutboxActivity extends AppCompatActivity {
         super.onCreate(b);
         SettingsStore.applyDynamicColors(this);
         renderShell();
+        String preparedId=getIntent().getStringExtra(EXTRA_PREPARED_ID);
+        if(preparedId!=null){
+            editingPrepared=PreparedJobStore.find(this,preparedId);
+            if(editingPrepared!=null){
+                File f=new File(editingPrepared.filePath);
+                if(f.exists()){
+                    merged=f;
+                    selectedProfileId=editingPrepared.profileId;
+                    sourceSender=new RectF(editingPrepared.sourceSender);
+                    sourceRecipient=new RectF(editingPrepared.sourceRecipient);
+                    targetSender=new RectF(editingPrepared.targetSender);
+                    targetRecipient=new RectF(editingPrepared.targetRecipient);
+                    addressEdited=!sourceSender.isEmpty()&&!sourceRecipient.isEmpty()&&!targetSender.isEmpty()&&!targetRecipient.isEmpty();
+                    try{previewBitmap=renderFirstPage(f,900);}catch(Exception ignored){}
+                    step=3;
+                    renderStep();
+                }
+            }
+        }
     }
 
     @Override protected void onResume(){
         super.onResume();
         OutboxStore.importFolder(this);
-        refreshItems();
+        AutoFolderPresets.importPrepared(this);
+        if(editingPrepared==null)refreshItems();
     }
 
     private String displayName(Uri uri){
@@ -435,7 +457,20 @@ public class OutboxActivity extends AppCompatActivity {
         registered=new Spinner(this);
         registered.setAdapter(new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,new String[]{"Nein","Einschreiben Einwurf","Einschreiben","Einschreiben Rückschein"}));
         print.addView(registered,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,52)));
+        TextView shippingLabel=UiKit.body(this,"Versandziel");shippingLabel.setPadding(0,UiKit.dp(this,8),0,0);print.addView(shippingLabel);
+        shipping=new Spinner(this);
+        shipping.setAdapter(new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,new String[]{"National","International"}));
+        print.addView(shipping,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,52)));
         c4=new MaterialSwitch(this);c4.setText("C4-Umschlag, ungefalzt");print.addView(c4);
+
+        if(editingPrepared!=null){
+            color.setChecked(editingPrepared.color);
+            duplex.setChecked(editingPrepared.duplex);
+            int regIndex=0;for(int i=0;i<registered.getCount();i++)if(String.valueOf(registered.getItemAtPosition(i)).equals(editingPrepared.registered))regIndex=i;
+            registered.setSelection(regIndex);
+            shipping.setSelection("international".equals(editingPrepared.shipping)?1:0);
+            c4.setChecked(editingPrepared.c4);
+        }
         root.addView(UiKit.surfaceCard(this,print));
 
         LinearLayout addressBox=new LinearLayout(this);addressBox.setOrientation(LinearLayout.VERTICAL);
@@ -468,6 +503,10 @@ public class OutboxActivity extends AppCompatActivity {
             public void onItemSelected(android.widget.AdapterView<?> p,View v,int pos,long id){refreshProfiles();}
             public void onNothingSelected(android.widget.AdapterView<?> p){}
         });
+        shipping.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){
+            public void onItemSelected(android.widget.AdapterView<?> p,View v,int pos,long id){refreshProfiles();}
+            public void onNothingSelected(android.widget.AdapterView<?> p){}
+        });
         localCorrection.setOnCheckedChangeListener((b,checked)->{
             Profile p=SecureStore.find(this,selectedProfileId);
             applyLayoutForProfile(p,checked);
@@ -478,10 +517,15 @@ public class OutboxActivity extends AppCompatActivity {
         });
 
         refreshProfiles();
+        if(editingPrepared!=null&&editingPrepared.addressCorrection)localCorrection.setChecked(true);
+
+        MaterialButton saveOutbox=UiKit.tonal(this,editingPrepared==null?"In Ausgang legen":"Änderungen im Ausgang speichern");
+        saveOutbox.setOnClickListener(v->savePrepared(saveOutbox));
+        LinearLayout.LayoutParams qlp=new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,54));qlp.setMargins(0,UiKit.dp(this,12),0,0);root.addView(saveOutbox,qlp);
 
         MaterialButton send=UiKit.primary(this,"Brief jetzt versenden");
         send.setOnClickListener(v->send(send));
-        LinearLayout.LayoutParams slp=new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,58));slp.setMargins(0,UiKit.dp(this,12),0,0);root.addView(send,slp);
+        LinearLayout.LayoutParams slp=new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,58));slp.setMargins(0,UiKit.dp(this,8),0,0);root.addView(send,slp);
     }
 
     private TextView section(String text){
@@ -493,7 +537,9 @@ public class OutboxActivity extends AppCompatActivity {
         o.color=color!=null&&color.isChecked();
         o.duplex=duplex!=null&&duplex.isChecked();
         o.registered=registered==null?"Nein":String.valueOf(registered.getSelectedItem());
+        o.shipping=shipping!=null&&shipping.getSelectedItemPosition()==1?"international":"national";
         o.c4=c4!=null&&c4.isChecked();
+        o.addressCorrection=localCorrection!=null&&localCorrection.isChecked();
         return o;
     }
 
@@ -685,6 +731,47 @@ public class OutboxActivity extends AppCompatActivity {
         }
     }
 
+    private void savePrepared(MaterialButton button){
+        Profile p=SecureStore.find(this,selectedProfileId);
+        if(p==null){DebugUtil.error(this,button,"Bitte ein kompatibles Profil wählen.");return;}
+        if(merged==null||!merged.exists()){DebugUtil.error(this,button,"Die vorbereitete PDF fehlt.");return;}
+        JobOptions o=currentOptions();
+        if(o.addressCorrection&&!addressEdited){
+            DebugUtil.error(this,button,"Bestätige zuerst Original- und Zielposition im Adresseditor.");
+            return;
+        }
+
+        button.setEnabled(false);button.setText("Wird gespeichert…");
+        new Thread(()->{
+            try{
+                PreparedJob j=editingPrepared==null?new PreparedJob():editingPrepared;
+                j.profileId=p.id;j.color=o.color;j.duplex=o.duplex;j.registered=o.registered;j.c4=o.c4;j.shipping=o.shipping;j.addressCorrection=o.addressCorrection;
+                j.sourceSender=new RectF(sourceSender);j.sourceRecipient=new RectF(sourceRecipient);j.targetSender=new RectF(targetSender);j.targetRecipient=new RectF(targetRecipient);
+                if(j.name==null||j.name.isBlank()||"Brief".equals(j.name)){
+                    j.name=working.isEmpty()?"Vorbereiteter Brief":working.get(0).name+(working.size()>1?" +"+(working.size()-1):"");
+                }
+                if(editingPrepared==null){
+                    File persisted=PreparedJobStore.persistPdf(this,merged,j.id);
+                    j.filePath=persisted.getAbsolutePath();
+                    for(OutboxItem item:working){
+                        j.inputNames.add(item.name);
+                        if(item.deleteAfterSend)j.sourceUris.add(item.uri);
+                    }
+                    RectF keyArea=sourceRecipient.isEmpty()?AddressCorrectionProcessor.decode(p.recipientWindow):sourceRecipient;
+                    j.recipientKey=AddressTextExtractor.recipientKey(this,persisted,keyArea);
+                }
+                PreparedJobStore.upsert(this,j);
+                editingPrepared=j;
+                runOnUiThread(()->{
+                    button.setEnabled(true);button.setText("Im Ausgang gespeichert");
+                    Snackbar.make(button,"Brief liegt im Ausgang.",Snackbar.LENGTH_LONG).show();
+                });
+            }catch(Exception e){
+                runOnUiThread(()->{button.setEnabled(true);button.setText("Erneut speichern");DebugUtil.error(this,button,"Ausgang speichern",e);});
+            }
+        },"prepare-outbox").start();
+    }
+
     private void send(MaterialButton button){
         Profile p=SecureStore.find(this,selectedProfileId);
         if(p==null){DebugUtil.error(this,button,"Bitte ein kompatibles Profil wählen.");return;}
@@ -704,6 +791,7 @@ public class OutboxActivity extends AppCompatActivity {
         button.setEnabled(false);button.setText("Wird versendet…");
         File source=merged;
         List<OutboxItem> sentItems=new ArrayList<>(working);
+        PreparedJob preparedAtSend=editingPrepared;
         new Thread(()->{
             File corrected=null;
             try{
@@ -729,12 +817,22 @@ public class OutboxActivity extends AppCompatActivity {
                 }else{
                     ProviderSender.send(this,Uri.fromFile(outgoing),p,o);
                 }
-                int deleteFailures=DebugProfileManager.isDebug(p)?0:OutboxStore.removeSent(this,sentItems);
+                int deleteFailures=0;
+                if(preparedAtSend!=null){
+                    if(!DebugProfileManager.isDebug(p)){
+                        deleteFailures=deletePreparedSources(preparedAtSend);
+                        PreparedJobStore.delete(this,preparedAtSend.id);
+                    }
+                }else if(!DebugProfileManager.isDebug(p)){
+                    deleteFailures=OutboxStore.removeSent(this,sentItems);
+                }
                 File finalCorrected=corrected;
                 runOnUiThread(()->{
                     if(finalCorrected!=null)finalCorrected.delete();
                     Snackbar.make(button,deleteFailures==0?"Versand erfolgreich übergeben.":"Versand erfolgreich. Einige Auto-Import-Dateien konnten nicht gelöscht werden und werden nicht erneut importiert.",Snackbar.LENGTH_LONG).show();
-                    selectedIds.clear();working.clear();step=1;
+                    selectedIds.clear();working.clear();
+                    if(preparedAtSend!=null){finish();return;}
+                    step=1;
                     if(merged!=null){merged.delete();merged=null;}
                     refreshItems();
                 });
@@ -743,6 +841,17 @@ public class OutboxActivity extends AppCompatActivity {
                 runOnUiThread(()->{button.setEnabled(true);button.setText("Erneut versenden");DebugUtil.error(this,button,"Versand",e);});
             }
         },"outbox-send").start();
+    }
+
+    private int deletePreparedSources(PreparedJob job){
+        int failures=0;
+        for(String uri:job.sourceUris){
+            try{
+                androidx.documentfile.provider.DocumentFile d=androidx.documentfile.provider.DocumentFile.fromSingleUri(this,Uri.parse(uri));
+                if(d==null||!d.delete())failures++;
+            }catch(Exception e){failures++;}
+        }
+        return failures;
     }
 
     @Override protected void onDestroy(){
