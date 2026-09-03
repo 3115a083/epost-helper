@@ -49,6 +49,7 @@ public class MainActivity extends AppCompatActivity {
     private int statsPeriodIndex=0;
     private boolean statsRemoteLoading=false;
     private boolean statsRemoteLoaded=false;
+    private boolean statsRemoteAvailable=false;
     private List<RecentLetter> statsRemoteCache=new ArrayList<>();
 
     private final ActivityResultLauncher<Uri> folderPicker=registerForActivityResult(
@@ -200,10 +201,11 @@ public class MainActivity extends AppCompatActivity {
         };
         statsPeriodIndex=Math.max(0,Math.min(statsPeriodIndex,2));
         boolean useRemote=statsApi!=null&&statsApi.includeServerHistoryInStats;
+        boolean useRemoteData=useRemote&&statsRemoteLoaded&&statsRemoteAvailable;
         SendStatsStore.Summary summary=SendStatsStore.summarize(
                 this,periods[statsPeriodIndex],
-                useRemote?statsRemoteCache:java.util.Collections.emptyList(),
-                statsApi==null?"":statsApi.id,useRemote&&statsRemoteLoaded);
+                useRemoteData?statsRemoteCache:java.util.Collections.emptyList(),
+                statsApi==null?"":statsApi.id,useRemoteData);
 
         LinearLayout hero=new LinearLayout(this);hero.setOrientation(LinearLayout.VERTICAL);
         LinearLayout statHead=new LinearLayout(this);statHead.setGravity(Gravity.CENTER_VERTICAL);
@@ -242,6 +244,9 @@ public class MainActivity extends AppCompatActivity {
         if(useRemote&&!statsRemoteLoaded){
             TextView src=UiKit.heroBody(this,statsRemoteLoading?"LetterXpress-Statistik wird synchronisiert…":"Serverstatistik noch nicht geladen");
             src.setTextSize(11);hero.addView(src);
+        }else if(useRemote&&statsRemoteLoaded&&!statsRemoteAvailable){
+            TextView src=UiKit.heroBody(this,"Serverstatistik nicht erreichbar · lokale Daten werden verwendet");
+            src.setTextSize(11);hero.addView(src);
         }
         content.addView(UiKit.hero(this,hero,g[0],g[1]));
 
@@ -256,7 +261,7 @@ public class MainActivity extends AppCompatActivity {
             refresh.setMinWidth(0);refresh.setPadding(UiKit.dp(this,12),0,UiKit.dp(this,12),0);
             refresh.setOnClickListener(v->{
                 recentCache.clear();recentLoaded=false;balanceCache="";
-                statsRemoteCache.clear();statsRemoteLoaded=false;
+                statsRemoteCache.clear();statsRemoteLoaded=false;statsRemoteAvailable=false;
                 loadRecent(api,true);
                 if(statsApi!=null&&statsApi.includeServerHistoryInStats)loadStatsRemote(statsApi);
             });
@@ -281,9 +286,9 @@ public class MainActivity extends AppCompatActivity {
         new Thread(()->{
             try{
                 List<RecentLetter> jobs=LetterXpressApiClient.recentJobs(p,1000);
-                runOnUiThread(()->{statsRemoteLoading=false;statsRemoteLoaded=true;statsRemoteCache=jobs;if(currentTab==0)render();});
+                runOnUiThread(()->{statsRemoteLoading=false;statsRemoteLoaded=true;statsRemoteAvailable=true;statsRemoteCache=jobs;if(currentTab==0)render();});
             }catch(Exception e){
-                runOnUiThread(()->{statsRemoteLoading=false;statsRemoteLoaded=true;statsRemoteCache.clear();if(currentTab==0)render();});
+                runOnUiThread(()->{statsRemoteLoading=false;statsRemoteLoaded=true;statsRemoteAvailable=false;statsRemoteCache.clear();if(currentTab==0)render();});
             }
         },"stats-remote").start();
     }
