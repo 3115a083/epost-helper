@@ -118,6 +118,7 @@ public final class AutoFolderPresets {
 
                     RectFHolder.populateRecipientKey(c,job,profile);
                     PreparedJobStore.upsert(c,job);
+                    if(raw!=null)OutboxStore.removeQueued(c,java.util.Collections.singletonList(raw));
                     count++;
                 }catch(Exception ignored){}
             }
