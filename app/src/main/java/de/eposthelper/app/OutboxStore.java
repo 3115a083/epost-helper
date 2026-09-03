@@ -118,8 +118,14 @@ public final class OutboxStore {
 
     public static void reconcilePrepared(Context c){
         List<OutboxItem> all=load(c);
+        java.util.HashSet<String> preparedUris=new java.util.HashSet<>();
+        for(PreparedJob j:PreparedJobStore.load(c)){
+            if(j.sourceUri!=null&&!j.sourceUri.isBlank())preparedUris.add(j.sourceUri);
+            preparedUris.addAll(j.sourceUris);
+        }
+        if(preparedUris.isEmpty())return;
         int before=all.size();
-        all.removeIf(i->PreparedJobStore.hasSourceUri(c,i.uri));
+        all.removeIf(i->preparedUris.contains(i.uri));
         if(all.size()!=before)save(c,all);
     }
 
