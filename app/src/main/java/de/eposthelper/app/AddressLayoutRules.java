@@ -19,8 +19,28 @@ public final class AddressLayoutRules {
     // Deutsche Post describes a typical 90 x 45 mm window and at least 85 x 30 mm
     // when only the recipient address is present. The compact default keeps a 5 mm
     // sender line plus a 30 mm recipient block.
+    public static RectF postWindow(){
+        return mm(20f,45f,90f,45f);
+    }
+
+    public static RectF postSenderTarget(){
+        return mm(23f,46.5f,85f,5.5f);
+    }
+
+    public static RectF postReserved(){
+        return mm(23f,52f,85f,16f);
+    }
+
+    public static RectF postRecipientTarget(){
+        return mm(23f,68f,85f,21f);
+    }
+
     public static RectF postRecipientCompact(){
-        return mm(20f,50f,85f,30f);
+        return postRecipientTarget();
+    }
+
+    public static RectF lxpWindow(){
+        return mm(20f,44f,85f,44f);
     }
 
     // LetterXpress official registered-mail template:
@@ -51,7 +71,7 @@ public final class AddressLayoutRules {
     public static RectF reserved(Profile p,JobOptions o){
         if(p==null||!registered(o))return new RectF();
         if(Profile.PROVIDER_LETTERXPRESS.equals(p.provider))return lxpRegisteredReserved();
-        if(Profile.PROVIDER_POST.equals(p.provider)&&p.addressCorrection)return new RectF();
+        if(Profile.PROVIDER_POST.equals(p.provider))return postReserved();
         return new RectF();
     }
 
@@ -64,15 +84,24 @@ public final class AddressLayoutRules {
     public static RectF targetSender(Profile p,JobOptions o){
         if(p!=null&&Profile.PROVIDER_LETTERXPRESS.equals(p.provider)&&registered(o))
             return lxpRegisteredSender();
+        if(p!=null&&Profile.PROVIDER_POST.equals(p.provider)&&registered(o))
+            return postSenderTarget();
         return normalSender();
     }
 
     public static RectF targetRecipient(Profile p,JobOptions o){
         if(p!=null&&Profile.PROVIDER_LETTERXPRESS.equals(p.provider)&&registered(o))
             return lxpRegisteredRecipient();
-        if(p!=null&&Profile.PROVIDER_POST.equals(p.provider))
-            return postRecipientCompact();
+        if(p!=null&&Profile.PROVIDER_POST.equals(p.provider)&&registered(o))
+            return postRecipientTarget();
         return normalRecipient();
+    }
+
+    public static RectF window(Profile p,JobOptions o){
+        if(p==null)return new RectF();
+        if(Profile.PROVIDER_LETTERXPRESS.equals(p.provider)&&registered(o))return lxpWindow();
+        if(Profile.PROVIDER_POST.equals(p.provider)&&registered(o))return postWindow();
+        return new RectF();
     }
 
     private static RectF mm(float x,float y,float w,float h){
