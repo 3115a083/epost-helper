@@ -116,6 +116,15 @@ public final class OutboxStore {
         return f.getName()==null?"PDF":f.getName();
     }
 
+    public static void removeQueued(Context c,List<OutboxItem> items){
+        if(items==null||items.isEmpty())return;
+        java.util.HashSet<String> ids=new java.util.HashSet<>();
+        for(OutboxItem i:items)ids.add(i.id);
+        List<OutboxItem> all=load(c);
+        all.removeIf(i->ids.contains(i.id));
+        save(c,all);
+    }
+
     public static int removeSent(Context c,List<OutboxItem> sent){
         List<OutboxItem> all=load(c);
         Set<String> ids=new HashSet<>();
