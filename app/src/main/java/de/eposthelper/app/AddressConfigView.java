@@ -22,12 +22,15 @@ public final class AddressConfigView extends View {
     private final RectF recipient=AddressLayoutRules.normalRecipient();
     private final RectF reserved=new RectF();
     private final RectF recipientSafety=new RectF();
+    private final RectF windowArea=new RectF();
 
     private RectF active;
     private boolean showReserved=false;
     private boolean showRecipientSafety=false;
+    private boolean showWindow=false;
     private String reservedLabel="Reservierter Bereich";
     private String recipientSafetyLabel="Adress-Sicherheitsbereich";
+    private String windowLabel="Brieffenster";
     private boolean resizing=false;
     private boolean snapEnabled=true;
     private boolean interactive=true;
@@ -106,6 +109,18 @@ public final class AddressConfigView extends View {
         invalidate();
     }
 
+    public void setWindowArea(RectF area,String label){
+        if(area==null||area.isEmpty()){
+            windowArea.setEmpty();
+            showWindow=false;
+        }else{
+            windowArea.set(area);
+            showWindow=true;
+        }
+        windowLabel=label==null?"Brieffenster":label;
+        invalidate();
+    }
+
     public void setRecipientSafetyArea(RectF area,String label){
         if(area==null||area.isEmpty()){
             recipientSafety.setEmpty();
@@ -181,6 +196,21 @@ public final class AddressConfigView extends View {
             paint.setColor(0x335B5BD6);
             paint.setStrokeWidth(UiKit.dp(getContext(),1));
             canvas.drawLine(sx,imageRect.top,sx,imageRect.bottom,paint);
+        }
+
+        if(showWindow&&RectF.intersects(viewport,windowArea)){
+            RectF wp=toPixels(windowArea);
+            int wc=0xFF4C7BD9;
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor((wc&0x00FFFFFF)|0x12000000);
+            canvas.drawRect(wp,paint);
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(UiKit.dp(getContext(),2));
+            paint.setColor(wc);
+            canvas.drawRect(wp,paint);
+            paint.setStyle(Paint.Style.FILL);
+            paint.setTextSize(UiKit.dp(getContext(),10));
+            canvas.drawText(windowLabel,wp.left+UiKit.dp(getContext(),5),wp.top+UiKit.dp(getContext(),13),paint);
         }
 
         if(showRecipientSafety&&RectF.intersects(viewport,recipientSafety)){
