@@ -700,10 +700,9 @@ public class OutboxActivity extends AppCompatActivity {
 
         RectF window=DebugProfileManager.isDebug(p)?new RectF():AddressLayoutRules.window(p,o);
         RectF reserved=DebugProfileManager.isDebug(p)?new RectF():AddressLayoutRules.reserved(p,o);
-        RectF safety=DebugProfileManager.isDebug(p)?new RectF():AddressLayoutRules.recipientOverflow(targetRecipient,AddressLayoutRules.targetRecipient(p,o));
-        addressPreview.setWindowArea(window,window.isEmpty()?null:"Sichtfenster");
-        addressPreview.setReservedArea(reserved,reserved.isEmpty()?null:"Porto / DVF");
-        addressPreview.setRecipientSafetyArea(safety,safety.isEmpty()?null:"Adress-Sicherheitsreserve");
+        addressPreview.setWindowArea(window,window.isEmpty()?null:"Brief-Sichtfenster");
+        addressPreview.setReservedArea(reserved,reserved.isEmpty()?null:"Porto / DV-Freimachung");
+        addressPreview.setRecipientSafetyArea(null,null);
 
         if(Profile.PROVIDER_POST.equals(p.provider)&&p.addressCorrection&&correctionRequested){
             layoutHint.setText("Lokale Adresskorrektur ist eingeschaltet. Dieses Deutsche-Post-Profil ist zusätzlich als serverseitig korrigiert markiert. Prüfe in der großen Vorschau, ob dadurch eine Doppelkorrektur entstehen kann.");
