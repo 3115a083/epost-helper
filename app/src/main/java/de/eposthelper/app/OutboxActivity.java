@@ -819,9 +819,10 @@ public class OutboxActivity extends AppCompatActivity {
                     deleteFailures=OutboxStore.removeSent(this,sentItems);
                 }
                 File finalCorrected=corrected;
+                final int finalDeleteFailures=deleteFailures;
                 runOnUiThread(()->{
                     if(finalCorrected!=null)finalCorrected.delete();
-                    Snackbar.make(button,deleteFailures==0?"Versand erfolgreich übergeben.":"Versand erfolgreich. Einige Auto-Import-Dateien konnten nicht gelöscht werden und werden nicht erneut importiert.",Snackbar.LENGTH_LONG).show();
+                    Snackbar.make(button,finalDeleteFailures==0?"Versand erfolgreich übergeben.":"Versand erfolgreich. Einige Auto-Import-Dateien konnten nicht gelöscht werden und werden nicht erneut importiert.",Snackbar.LENGTH_LONG).show();
                     selectedIds.clear();working.clear();
                     if(preparedAtSend!=null){finish();return;}
                     step=1;
