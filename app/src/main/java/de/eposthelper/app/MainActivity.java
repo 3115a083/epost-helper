@@ -81,6 +81,7 @@ public class MainActivity extends AppCompatActivity {
 
     @Override protected void onResume(){
         super.onResume();
+        queueCostCache="";
         if(content!=null)render();
     }
 
@@ -263,7 +264,7 @@ public class MainActivity extends AppCompatActivity {
                 }
                 String value;
                 if(known<=0&&unknown==0)value="0,00 €";
-                else if(known>0)value=String.format(java.util.Locale.GERMANY,"%.2f €",known)+(unknown>0?" + ?":"");
+                else if(known>0)value=String.format(java.util.Locale.GERMANY,"≈ %.2f €",known)+(unknown>0?" + ?":"");
                 else value="?";
                 final String result=value;
                 runOnUiThread(()->{
