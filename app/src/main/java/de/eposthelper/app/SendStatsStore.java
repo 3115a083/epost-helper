@@ -68,7 +68,7 @@ public final class SendStatsStore {
                 if(ts<bounds[0]||ts>=bounds[1])continue;
                 out.count++;
                 double value=r.amount+r.vat;
-                if(value>0){out.cost+=value;out.knownCostCount++;}
+                if(value>0){out.cost+=value;out.knownCostCount++;}else out.unknownCostCount++;
                 String type=(r.status==null||r.status.isBlank())?"LetterXpress":r.status;
                 out.typeCounts.put(type,out.typeCounts.getOrDefault(type,0)+1);
             }
@@ -104,13 +104,14 @@ public final class SendStatsStore {
         public int count=0;
         public double cost=0d;
         public int knownCostCount=0;
+        public int unknownCostCount=0;
         public final java.util.LinkedHashMap<String,Integer> typeCounts=new java.util.LinkedHashMap<>();
 
         void add(String registered,boolean color,boolean duplex,double value){
             count++;
             String type=(registered==null||"Nein".equals(registered)?"Standard":registered)+" · "+(color?"Farbe":"SW")+" · "+(duplex?"Duplex":"Einseitig");
             typeCounts.put(type,typeCounts.getOrDefault(type,0)+1);
-            if(value>=0){cost+=value;knownCostCount++;}
+            if(value>=0){cost+=value;knownCostCount++;}else unknownCostCount++;
         }
 
         public String topTypes(){
