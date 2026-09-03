@@ -691,9 +691,16 @@ public class OutboxActivity extends AppCompatActivity {
                 targetSender=AddressLayoutRules.moveLike(sourceSender,AddressLayoutRules.targetSender(p,o));
                 targetRecipient=AddressLayoutRules.moveLike(sourceRecipient,AddressLayoutRules.targetRecipient(p,o));
             }
+            if(previewBitmap!=null&&!previewBitmap.isRecycled()){
+                try{
+                    addressPreview.setBitmap(AddressPreviewComposer.compose(previewBitmap,sourceSender,sourceRecipient,targetSender,targetRecipient));
+                }catch(Exception ignored){}
+            }
             addressPreview.setBoxes(targetSender,targetRecipient);
             addressPreview.setInteractive(false);
         }else{
+            if(previewBitmap!=null&&!previewBitmap.isRecycled())
+                addressPreview.setBitmap(previewBitmap.copy(Bitmap.Config.ARGB_8888,false));
             addressPreview.setBoxes(sourceSender,sourceRecipient);
             addressPreview.setInteractive(false);
         }
