@@ -27,7 +27,7 @@ public class ProfileEditActivity extends AppCompatActivity {
     private Profile profile;
     private EditText name,url,user,secret,pin,sshKey;
     private Spinner provider,type,registered;
-    private MaterialSwitch active,duplex,color,remoteAddressCorrection,showBalance;
+    private MaterialSwitch active,duplex,color,remoteAddressCorrection,showBalance,serverStats;
     private LinearLayout credentials,balanceCard;
     private TextView routeHelp;
 
@@ -146,6 +146,12 @@ public class ProfileEditActivity extends AppCompatActivity {
         showBalance.setText("Guthaben auf der Startseite anzeigen");
         showBalance.setChecked(profile.showBalanceOnHome);
         balanceCard.addView(showBalance);
+        serverStats=new MaterialSwitch(this);
+        serverStats.setText("Serverseitige LetterXpress-Sendungen in Statistiken verwenden");
+        serverStats.setChecked(profile.includeServerHistoryInStats);
+        balanceCard.addView(serverStats);
+        TextView statsHelp=UiKit.body(this,"Aus: Statistiken verwenden nur lokal über diese App protokollierte Sendungen. An: LetterXpress-Aufträge vom Server ersetzen für dieses Profil die lokalen LetterXpress-Ereignisse, damit keine Doppelzählung entsteht.");
+        statsHelp.setTextSize(12);statsHelp.setPadding(0,UiKit.dp(this,4),0,0);balanceCard.addView(statsHelp);
         root.addView(UiKit.surfaceCard(this,balanceCard));
 
         LinearLayout defaults=cardBody("Standard-Versand","Diese Werte sind Startwerte und können pro Brief überschrieben werden.");
@@ -297,6 +303,7 @@ public class ProfileEditActivity extends AppCompatActivity {
         profile.registeredMail=String.valueOf(registered.getSelectedItem());
         profile.addressCorrection=!lxp&&remoteAddressCorrection.isChecked();
         profile.showBalanceOnHome=lxp&&Profile.TYPE_LXP_API.equals(profile.type)&&showBalance.isChecked();
+        profile.includeServerHistoryInStats=lxp&&Profile.TYPE_LXP_API.equals(profile.type)&&serverStats.isChecked();
     }
 
     private void persist() throws Exception{
