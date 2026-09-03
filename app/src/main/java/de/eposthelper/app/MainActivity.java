@@ -449,7 +449,7 @@ public class MainActivity extends AppCompatActivity {
             List<PreparedJob> same=groups.get(key);
             if(same!=null&&same.size()>1&&same.get(0).id.equals(j.id)){
                 MaterialButton merge=UiKit.tonal(this,"Briefe an gleichen Empfänger zusammenführen ("+same.size()+")");
-                merge.setOnClickListener(v->mergePreparedGroup(same,merge));
+                merge.setOnClickListener(v->choosePreparedMergeMode(same,merge));
                 LinearLayout.LayoutParams mlp=new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,48));mlp.setMargins(0,UiKit.dp(this,7),0,0);box.addView(merge,mlp);
             }
 
@@ -476,14 +476,29 @@ public class MainActivity extends AppCompatActivity {
         },"prepared-send").start();
     }
 
-    private void mergePreparedGroup(List<PreparedJob> group,MaterialButton button){
+    private void choosePreparedMergeMode(List<PreparedJob> group,MaterialButton button){
+        if(group==null||group.size()<2)return;
+        PreparedJob first=group.get(0);
+        if(!first.duplex){
+            mergePreparedGroup(group,button,false);
+            return;
+        }
+        new com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
+                .setTitle("Briefe zusammenführen")
+                .setMessage("Sollen die Quelldokumente auf getrennten Papierblättern bleiben? Bei aktivierter Trennung fügt die App bei einer ungeraden Seitenzahl eine weiße Seite ein.")
+                .setNegativeButton("Direkt anhängen",(d,w)->mergePreparedGroup(group,button,false))
+                .setPositiveButton("Blätter trennen",(d,w)->mergePreparedGroup(group,button,true))
+                .show();
+    }
+
+    private void mergePreparedGroup(List<PreparedJob> group,MaterialButton button,boolean keepSheetBoundaries){
         if(group==null||group.size()<2)return;
         button.setEnabled(false);button.setText("Wird zusammengeführt…");
         new Thread(()->{
             File merged=null;
             try{
                 PreparedJob first=group.get(0);
-                merged=PdfMergeUtil.mergePrepared(this,group,first.duplex);
+                merged=PdfMergeUtil.mergePrepared(this,group,first.duplex&&keepSheetBoundaries);
                 PreparedJob combined=new PreparedJob();
                 combined.name=first.name+" + "+(group.size()-1)+" weitere";
                 combined.profileId=first.profileId;combined.color=first.color;combined.duplex=first.duplex;combined.registered=first.registered;
@@ -594,26 +609,6 @@ public class MainActivity extends AppCompatActivity {
         DebugProfileManager.setEnabled(this,true);
         if(hiddenDebugBox!=null)hiddenDebugBox.setVisibility(View.VISIBLE);
         Snackbar.make(content,"Debugmodus aktiviert. Lokales Debug-Druckprofil wurde eingerichtet.",Snackbar.LENGTH_LONG).show();
-    }
-
-    private void importFoldersNow(MaterialButton button){
-        String folder=SettingsStore.outboxFolder(this);
-        if(folder==null||folder.isBlank()){
-            Snackbar.make(content,"Bitte zuerst einen Importordner auswählen.",Snackbar.LENGTH_SHORT).show();
-            return;
-        }
-        button.setEnabled(false);
-        button.setText("Import läuft…");
-        new Thread(()->{
-            int raw=OutboxStore.importFolder(this);
-            int prepared=AutoFolderPresets.importPrepared(this);
-            runOnUiThread(()->{
-                button.setEnabled(true);
-                button.setText("Ordner jetzt importieren");
-                Snackbar.make(content,(raw+prepared)>0?(raw+prepared)+" PDF(s) importiert.":"Keine neuen PDFs gefunden.",Snackbar.LENGTH_LONG).show();
-                if(currentTab==2)render();
-            });
-        },"manual-folder-import").start();
     }
 
     private void renderSettings(){
