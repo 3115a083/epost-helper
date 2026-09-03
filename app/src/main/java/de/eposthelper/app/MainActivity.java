@@ -470,27 +470,31 @@ public class MainActivity extends AppCompatActivity {
 
         LinearLayout hero=new LinearLayout(this);hero.setOrientation(LinearLayout.VERTICAL);
         hero.addView(UiKit.heroTitle(this,jobs.isEmpty()?"Ausgang ist leer":jobs.size()+" vorbereitete"+(jobs.size()==1?"r Brief":" Briefe"),23));
-        hero.addView(UiKit.heroBody(this,"Vorbereitete Briefe bearbeiten, zusammenführen, löschen oder direkt versenden."));
-        MaterialButton add=UiKit.primary(this,"Neuen Brief vorbereiten");
-        add.setBackgroundTintList(ColorStateList.valueOf(0x33FFFFFF));
-        add.setOnClickListener(v->startActivity(new Intent(this,OutboxActivity.class)));
-        LinearLayout.LayoutParams alp=new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,50));alp.setMargins(0,UiKit.dp(this,10),0,0);hero.addView(add,alp);
+        hero.addView(UiKit.heroBody(this,"Vorbereitete Briefe prüfen, zusammenführen und gesammelt oder einzeln versenden."));
+
+        MaterialButton sendAll=UiKit.primary(this,"Alle versenden");
+        sendAll.setBackgroundTintList(ColorStateList.valueOf(0x44FFFFFF));
+        sendAll.setTextColor(0xFFFFFFFF);
+        sendAll.setEnabled(!jobs.isEmpty());
+        sendAll.setOnClickListener(v->confirmSendAll(jobs,sendAll));
+        LinearLayout.LayoutParams salp=new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,52));
+        salp.setMargins(0,UiKit.dp(this,10),0,0);hero.addView(sendAll,salp);
 
         MaterialButton importNow=UiKit.tonal(this,"Ordner jetzt importieren");
         importNow.setBackgroundTintList(ColorStateList.valueOf(0x22FFFFFF));
         importNow.setTextColor(0xFFFFFFFF);
         importNow.setEnabled(!SettingsStore.outboxFolder(this).isBlank());
         importNow.setOnClickListener(v->importFolderNow(importNow));
-        LinearLayout.LayoutParams ilp=new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,48));ilp.setMargins(0,UiKit.dp(this,8),0,0);hero.addView(importNow,ilp);
-
+        LinearLayout.LayoutParams ilp=new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,48));
+        ilp.setMargins(0,UiKit.dp(this,8),0,0);hero.addView(importNow,ilp);
         content.addView(UiKit.hero(this,hero,g[0],g[1]));
 
         if(jobs.isEmpty())return;
 
         java.util.Map<String,List<PreparedJob>> groups=new java.util.HashMap<>();
         for(PreparedJob j:jobs){
-            if(j.recipientKey==null||j.recipientKey.isBlank())continue;
-            String key=j.recipientKey+"|"+j.profileId+"|"+j.color+"|"+j.duplex+"|"+j.registered+"|"+j.shipping+"|"+j.addressCorrection;
+            if(j.isMergedGroup()||j.recipientKey==null||j.recipientKey.isBlank())continue;
+            String key=preparedGroupKey(j);
             groups.computeIfAbsent(key,k->new ArrayList<>()).add(j);
         }
 
@@ -509,6 +513,8 @@ public class MainActivity extends AppCompatActivity {
             String opts=(j.color?"Farbe":"SW")+" · "+(j.duplex?"Duplex":"Einseitig")+" · "+j.registered+" · "+("international".equals(j.shipping)?"International":"National")+(j.addressCorrection?" · Korrektur":"");
             TextView meta=UiKit.body(this,opts);meta.setTextSize(12);meta.setPadding(0,UiKit.dp(this,6),0,UiKit.dp(this,8));box.addView(meta);
 
+            if(j.isMergedGroup())renderMergedParts(box,j);
+
             LinearLayout actions=new LinearLayout(this);
             MaterialButton edit=UiKit.tonal(this,"Bearbeiten");
             edit.setOnClickListener(v->{Intent i=new Intent(this,OutboxActivity.class);i.putExtra(OutboxActivity.EXTRA_PREPARED_ID,j.id);startActivity(i);});
@@ -523,18 +529,129 @@ public class MainActivity extends AppCompatActivity {
 
             MaterialButton delete=UiKit.tonal(this,"Löschen");delete.setTextColor(0xFFB3261E);
             delete.setOnClickListener(v->{PreparedJobStore.delete(this,j.id);render();});
-            LinearLayout.LayoutParams dlp=new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,44));dlp.setMargins(0,UiKit.dp(this,7),0,0);box.addView(delete,dlp);
+            LinearLayout.LayoutParams dlp=new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,44));
+            dlp.setMargins(0,UiKit.dp(this,7),0,0);box.addView(delete,dlp);
 
-            String key=j.recipientKey+"|"+j.profileId+"|"+j.color+"|"+j.duplex+"|"+j.registered+"|"+j.shipping+"|"+j.addressCorrection;
-            List<PreparedJob> same=groups.get(key);
-            if(same!=null&&same.size()>1&&same.get(0).id.equals(j.id)){
-                MaterialButton merge=UiKit.tonal(this,"Briefe an gleichen Empfänger zusammenführen ("+same.size()+")");
-                merge.setOnClickListener(v->choosePreparedMergeMode(same,merge));
-                LinearLayout.LayoutParams mlp=new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,48));mlp.setMargins(0,UiKit.dp(this,7),0,0);box.addView(merge,mlp);
+            if(!j.isMergedGroup()){
+                List<PreparedJob> same=groups.get(preparedGroupKey(j));
+                if(same!=null&&same.size()>1&&same.get(0).id.equals(j.id)){
+                    MaterialButton merge=UiKit.tonal(this,"Mit "+(same.size()-1)+" weiteren Brief"+(same.size()==2?"":"en")+" zusammenführen");
+                    merge.setOnClickListener(v->choosePreparedMergeMode(same,merge));
+                    LinearLayout.LayoutParams mlp=new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,48));
+                    mlp.setMargins(0,UiKit.dp(this,7),0,0);box.addView(merge,mlp);
+                }
             }
 
             content.addView(UiKit.surfaceCard(this,box));
         }
+    }
+
+    private String preparedGroupKey(PreparedJob j){
+        return j.recipientKey+"|"+j.profileId+"|"+j.color+"|"+j.duplex+"|"+j.registered+"|"+j.shipping+"|"+j.addressCorrection;
+    }
+
+    private void renderMergedParts(LinearLayout box,PreparedJob merged){
+        List<PreparedJob> parts=merged.mergedParts();
+        if(parts.isEmpty())return;
+
+        LinearLayout nested=new LinearLayout(this);nested.setOrientation(LinearLayout.VERTICAL);
+        nested.setPadding(UiKit.dp(this,8),UiKit.dp(this,4),0,UiKit.dp(this,8));
+        for(int i=0;i<parts.size();i++){
+            PreparedJob part=parts.get(i);
+            LinearLayout row=new LinearLayout(this);row.setOrientation(LinearLayout.VERTICAL);
+            int indent=i==0?0:UiKit.dp(this,28);
+            row.setPadding(indent,UiKit.dp(this,4),0,UiKit.dp(this,4));
+            TextView partTitle=UiKit.heading(this,(i==0?"Hauptbrief · ":"↳ Briefteil · ")+part.name,14);
+            row.addView(partTitle);
+            if(i>0){
+                TextView sub=UiKit.body(this,"Wird hinter dem Hauptbrief versendet");
+                sub.setTextSize(11);row.addView(sub);
+            }
+            nested.addView(row);
+        }
+
+        if(merged.duplex){
+            com.google.android.material.materialswitch.MaterialSwitch separate=new com.google.android.material.materialswitch.MaterialSwitch(this);
+            separate.setText("Briefteile auf getrennten Blättern beginnen");
+            separate.setChecked(merged.keepPartsOnSeparateSheets);
+            separate.setOnCheckedChangeListener((button,checked)->updateMergedSheetMode(merged,checked,separate));
+            nested.addView(separate);
+        }
+
+        MaterialButton split=UiKit.tonal(this,"Briefe wieder trennen");
+        split.setOnClickListener(v->unmergePrepared(merged,split));
+        LinearLayout.LayoutParams slp=new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,44));
+        slp.setMargins(0,UiKit.dp(this,6),0,0);nested.addView(split,slp);
+        box.addView(nested);
+    }
+
+    private void confirmSendAll(List<PreparedJob> jobs,MaterialButton button){
+        if(jobs==null||jobs.isEmpty())return;
+        button.setEnabled(false);button.setText("Kosten werden ermittelt…");
+        new Thread(()->{
+            double known=0d;int unknown=0;String issue=null;
+            try{
+                for(PreparedJob job:jobs){
+                    Profile p=SecureStore.find(this,job.profileId);
+                    if(p==null||!ProfileCompatibility.compatible(p,job.options())){
+                        issue="Mindestens ein Brief hat kein kompatibles Versandprofil.";
+                        break;
+                    }
+                    File pdf=PreparedJobStore.ensureFile(this,job);
+                    int pages=PdfMergeUtil.countPages(pdf);
+                    if(DebugProfileManager.isDebug(p))continue;
+                    if(Profile.PROVIDER_LETTERXPRESS.equals(p.provider)){
+                        double price=LetterXpressPriceEstimator.gross(job.options(),pages);
+                        if(price>=0)known+=price;else unknown++;
+                    }else unknown++;
+                }
+            }catch(Exception e){issue=e.getMessage()==null?"Mindestens eine vorbereitete PDF ist nicht verfügbar.":e.getMessage();}
+
+            double finalKnown=known;int finalUnknown=unknown;String finalIssue=issue;
+            runOnUiThread(()->{
+                button.setEnabled(true);button.setText("Alle versenden");
+                if(finalIssue!=null){
+                    new com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
+                            .setTitle("Alle versenden nicht möglich")
+                            .setMessage(finalIssue+" Bitte die betroffenen Briefe zuerst prüfen.")
+                            .setPositiveButton("OK",null).show();
+                    return;
+                }
+                String price;
+                if(finalKnown<=0&&finalUnknown==0)price="0,00 €";
+                else if(finalKnown>0)price=String.format(java.util.Locale.GERMANY,"ca. %.2f €",finalKnown)+(finalUnknown>0?" + unbekannte Kosten":"");
+                else price="nicht vollständig ermittelbar";
+                new com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
+                        .setTitle("Alle Briefe versenden?")
+                        .setMessage(jobs.size()+" vorbereitete Briefe werden jetzt versendet.\n\nVoraussichtliche Kosten: "+price)
+                        .setNegativeButton("Abbrechen",null)
+                        .setPositiveButton("Alle versenden",(d,w)->sendAllPrepared(new ArrayList<>(jobs),button))
+                        .show();
+            });
+        },"queue-estimate").start();
+    }
+
+    private void sendAllPrepared(List<PreparedJob> jobs,MaterialButton button){
+        button.setEnabled(false);button.setText("Alle werden versendet…");
+        new Thread(()->{
+            int sent=0,failed=0;
+            for(PreparedJob job:jobs){
+                try{
+                    PreparedJobSender.send(this,job);
+                    deletePreparedSources(job);
+                    PreparedJobStore.delete(this,job.id);
+                    sent++;
+                }catch(Exception e){failed++;}
+            }
+            int finalSent=sent,finalFailed=failed;
+            runOnUiThread(()->{
+                render();
+                Snackbar.make(content,finalFailed==0
+                        ?finalSent+" Briefe erfolgreich übergeben."
+                        :finalSent+" Briefe versendet, "+finalFailed+" fehlgeschlagen. Fehlgeschlagene Briefe bleiben im Ausgang.",
+                        Snackbar.LENGTH_LONG).show();
+            });
+        },"send-all-prepared").start();
     }
 
     private void sendPrepared(PreparedJob job,MaterialButton button){
@@ -542,12 +659,7 @@ public class MainActivity extends AppCompatActivity {
         new Thread(()->{
             try{
                 PreparedJobSender.send(this,job);
-                if(job.deleteSourceAfterSend||!job.sourceUris.isEmpty()){
-                    for(String uri:job.sourceUris)try{
-                        androidx.documentfile.provider.DocumentFile d=androidx.documentfile.provider.DocumentFile.fromSingleUri(this,Uri.parse(uri));
-                        if(d!=null)d.delete();
-                    }catch(Exception ignored){}
-                }
+                deletePreparedSources(job);
                 PreparedJobStore.delete(this,job.id);
                 runOnUiThread(()->{Snackbar.make(content,"Brief erfolgreich übergeben.",Snackbar.LENGTH_LONG).show();render();});
             }catch(Exception e){
@@ -556,19 +668,33 @@ public class MainActivity extends AppCompatActivity {
         },"prepared-send").start();
     }
 
+    private void deletePreparedSources(PreparedJob job){
+        if(!(job.deleteSourceAfterSend||!job.sourceUris.isEmpty()))return;
+        for(String uri:job.sourceUris)try{
+            androidx.documentfile.provider.DocumentFile d=androidx.documentfile.provider.DocumentFile.fromSingleUri(this,Uri.parse(uri));
+            if(d!=null)d.delete();
+        }catch(Exception ignored){}
+    }
+
     private void choosePreparedMergeMode(List<PreparedJob> group,MaterialButton button){
         if(group==null||group.size()<2)return;
         PreparedJob first=group.get(0);
-        if(!first.duplex){
-            mergePreparedGroup(group,button,false);
-            return;
-        }
+        if(!first.duplex){mergePreparedGroup(group,button,false);return;}
         new com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
                 .setTitle("Briefe zusammenführen")
-                .setMessage("Sollen die Quelldokumente auf getrennten Papierblättern bleiben? Bei aktivierter Trennung fügt die App bei einer ungeraden Seitenzahl eine weiße Seite ein.")
+                .setMessage("Der erste Brief wird zum Hauptbrief. Die weiteren Briefe erscheinen eingerückt darunter. Sollen die Briefteile bei Duplex jeweils auf einem neuen Blatt beginnen?")
                 .setNegativeButton("Direkt anhängen",(d,w)->mergePreparedGroup(group,button,false))
                 .setPositiveButton("Blätter trennen",(d,w)->mergePreparedGroup(group,button,true))
                 .show();
+    }
+
+    private List<String> flattenMergedPartJson(List<PreparedJob> group){
+        List<String> parts=new ArrayList<>();
+        for(PreparedJob j:group){
+            if(j.isMergedGroup())parts.addAll(j.mergedPartJson);
+            else try{parts.add(j.toJson().toString());}catch(Exception ignored){}
+        }
+        return parts;
     }
 
     private void mergePreparedGroup(List<PreparedJob> group,MaterialButton button,boolean keepSheetBoundaries){
@@ -577,26 +703,91 @@ public class MainActivity extends AppCompatActivity {
         new Thread(()->{
             File merged=null;
             try{
-                PreparedJob first=group.get(0);
-                merged=PdfMergeUtil.mergePrepared(this,group,first.duplex&&keepSheetBoundaries);
+                List<PreparedJob> actualParts=new ArrayList<>();
+                for(String raw:flattenMergedPartJson(group)){
+                    try{actualParts.add(PreparedJob.fromJson(new org.json.JSONObject(raw)));}catch(Exception ignored){}
+                }
+                if(actualParts.size()<2)throw new IllegalStateException("Briefteile konnten nicht geladen werden.");
+                for(PreparedJob part:actualParts)PreparedJobStore.ensureFile(this,part);
+
+                PreparedJob first=actualParts.get(0);
+                merged=PdfMergeUtil.mergePrepared(this,actualParts,first.duplex&&keepSheetBoundaries);
                 PreparedJob combined=new PreparedJob();
-                combined.name=first.name+" + "+(group.size()-1)+" weitere";
+                combined.name=first.name+" + "+(actualParts.size()-1)+" weitere";
                 combined.profileId=first.profileId;combined.color=first.color;combined.duplex=first.duplex;combined.registered=first.registered;
                 combined.c4=first.c4;combined.shipping=first.shipping;combined.addressCorrection=first.addressCorrection;
                 combined.sourceSender=new RectF(first.sourceSender);combined.sourceRecipient=new RectF(first.sourceRecipient);
                 combined.targetSender=new RectF(first.targetSender);combined.targetRecipient=new RectF(first.targetRecipient);
                 combined.recipientKey=first.recipientKey;
-                for(PreparedJob j:group){combined.inputNames.addAll(j.inputNames);combined.sourceUris.addAll(j.sourceUris);}
+                combined.keepPartsOnSeparateSheets=first.duplex&&keepSheetBoundaries;
+                for(PreparedJob part:actualParts){
+                    try{combined.mergedPartJson.add(part.toJson().toString());}catch(Exception ignored){}
+                    combined.inputNames.addAll(part.inputNames);
+                    for(String uri:part.sourceUris)if(!combined.sourceUris.contains(uri))combined.sourceUris.add(uri);
+                }
                 File persisted=PreparedJobStore.persistPdf(this,merged,combined.id);combined.filePath=persisted.getAbsolutePath();
+
+                for(PreparedJob j:group){
+                    PreparedJobStore.removeMetadataOnly(this,j.id);
+                    if(j.isMergedGroup())try{new File(j.filePath).delete();}catch(Exception ignored){}
+                }
                 PreparedJobStore.upsert(this,combined);
-                for(PreparedJob j:group)PreparedJobStore.delete(this,j.id);
+
                 File finalMerged=merged;
-                runOnUiThread(()->{if(finalMerged!=null)finalMerged.delete();Snackbar.make(content,"Briefe zusammengeführt.",Snackbar.LENGTH_LONG).show();render();});
+                runOnUiThread(()->{
+                    if(finalMerged!=null)finalMerged.delete();
+                    Snackbar.make(content,"Briefe zusammengeführt. Der erste Brief ist der Hauptbrief.",Snackbar.LENGTH_LONG).show();
+                    render();
+                });
             }catch(Exception e){
                 File finalMerged=merged;
-                runOnUiThread(()->{if(finalMerged!=null)finalMerged.delete();button.setEnabled(true);button.setText("Zusammenführen");DebugUtil.error(this,button,"Briefe zusammenführen",e);});
+                runOnUiThread(()->{
+                    if(finalMerged!=null)finalMerged.delete();
+                    button.setEnabled(true);button.setText("Zusammenführen");
+                    DebugUtil.error(this,button,"Briefe zusammenführen",e);
+                });
             }
         },"prepared-merge").start();
+    }
+
+    private void updateMergedSheetMode(PreparedJob mergedJob,boolean separate,com.google.android.material.materialswitch.MaterialSwitch toggle){
+        toggle.setEnabled(false);
+        new Thread(()->{
+            File temp=null;
+            try{
+                List<PreparedJob> parts=mergedJob.mergedParts();
+                for(PreparedJob part:parts)PreparedJobStore.ensureFile(this,part);
+                temp=PdfMergeUtil.mergePrepared(this,parts,mergedJob.duplex&&separate);
+                File persisted=PreparedJobStore.persistPdf(this,temp,mergedJob.id);
+                mergedJob.filePath=persisted.getAbsolutePath();
+                mergedJob.keepPartsOnSeparateSheets=separate;
+                PreparedJobStore.upsert(this,mergedJob);
+                runOnUiThread(()->{Snackbar.make(content,"Blatttrennung aktualisiert.",Snackbar.LENGTH_SHORT).show();render();});
+            }catch(Exception e){
+                File finalTemp=temp;
+                runOnUiThread(()->{
+                    if(finalTemp!=null)finalTemp.delete();
+                    toggle.setEnabled(true);toggle.setChecked(!separate);
+                    DebugUtil.error(this,toggle,"Briefteile aktualisieren",e);
+                });
+            }finally{if(temp!=null)temp.delete();}
+        },"update-merged-sheets").start();
+    }
+
+    private void unmergePrepared(PreparedJob mergedJob,MaterialButton button){
+        button.setEnabled(false);button.setText("Wird getrennt…");
+        new Thread(()->{
+            try{
+                List<PreparedJob> parts=mergedJob.mergedParts();
+                if(parts.size()<2)throw new IllegalStateException("Gespeicherte Briefteile fehlen.");
+                PreparedJobStore.removeMetadataOnly(this,mergedJob.id);
+                try{new File(mergedJob.filePath).delete();}catch(Exception ignored){}
+                for(PreparedJob part:parts)PreparedJobStore.upsert(this,part);
+                runOnUiThread(()->{Snackbar.make(content,"Briefe wieder getrennt.",Snackbar.LENGTH_LONG).show();render();});
+            }catch(Exception e){
+                runOnUiThread(()->{button.setEnabled(true);button.setText("Briefe wieder trennen");DebugUtil.error(this,button,"Briefe trennen",e);});
+            }
+        },"prepared-unmerge").start();
     }
 
     private void renderProfileSettings(){

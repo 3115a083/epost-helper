@@ -1075,7 +1075,7 @@ public class OutboxActivity extends AppCompatActivity {
     }
 
     @Override protected void onDestroy(){
-        if(merged!=null)merged.delete();
+        if(merged!=null&&editingPrepared==null)merged.delete();
         if(previewBitmap!=null&&!previewBitmap.isRecycled())previewBitmap.recycle();
         if(addressPreview!=null)addressPreview.clearBitmap();
         super.onDestroy();

@@ -18,10 +18,7 @@ public final class PreparedJobStore {
         String raw=c.getSharedPreferences(PREF,Context.MODE_PRIVATE).getString(KEY,"[]");
         try{
             JSONArray a=new JSONArray(raw);
-            for(int i=0;i<a.length();i++){
-                PreparedJob j=PreparedJob.fromJson(a.getJSONObject(i));
-                if(new File(j.filePath).exists())out.add(j);
-            }
+            for(int i=0;i<a.length();i++)out.add(PreparedJob.fromJson(a.getJSONObject(i)));
         }catch(Exception ignored){}
         return out;
     }
@@ -65,6 +62,53 @@ public final class PreparedJobStore {
         return dest;
     }
 
+    public static File ensureFile(Context c,PreparedJob job) throws Exception{
+        if(job==null)throw new IllegalArgumentException("Vorbereiteter Brief fehlt");
+        File current=job.filePath==null?null:new File(job.filePath);
+        if(current!=null&&current.exists()&&current.length()>0)return current;
+
+        if(job.isMergedGroup()){
+            List<PreparedJob> parts=job.mergedParts();
+            if(parts.size()>1){
+                for(PreparedJob part:parts)ensureFile(c,part);
+                File merged=PdfMergeUtil.mergePrepared(c,parts,job.duplex&&job.keepPartsOnSeparateSheets);
+                try{
+                    File restored=persistPdf(c,merged,job.id);
+                    job.filePath=restored.getAbsolutePath();
+                    upsert(c,job);
+                    return restored;
+                }finally{merged.delete();}
+            }
+        }
+
+        List<String> candidates=new ArrayList<>();
+        if(job.sourceUri!=null&&!job.sourceUri.isBlank())candidates.add(job.sourceUri);
+        for(String uri:job.sourceUris)if(uri!=null&&!uri.isBlank()&&!candidates.contains(uri))candidates.add(uri);
+        if(candidates.size()==1){
+            File restored=persistUri(c,android.net.Uri.parse(candidates.get(0)),job.id);
+            job.filePath=restored.getAbsolutePath();
+            upsert(c,job);
+            return restored;
+        }
+        if(candidates.size()>1){
+            List<OutboxItem> items=new ArrayList<>();
+            int index=0;
+            for(String uri:candidates){
+                OutboxItem item=new OutboxItem();
+                item.uri=uri;item.name="Briefteil "+(++index);
+                items.add(item);
+            }
+            File merged=PdfMergeUtil.merge(c,items);
+            try{
+                File restored=persistPdf(c,merged,job.id);
+                job.filePath=restored.getAbsolutePath();
+                upsert(c,job);
+                return restored;
+            }finally{merged.delete();}
+        }
+        throw new IllegalStateException("Vorbereitete PDF fehlt und die Quelldatei ist nicht mehr verfügbar.");
+    }
+
     public static boolean hasSourceUri(Context c,String uri){
         if(uri==null||uri.isBlank())return false;
         for(PreparedJob j:load(c)){
@@ -74,9 +118,25 @@ public final class PreparedJobStore {
         return false;
     }
 
+    public static void removeMetadataOnly(Context c,String id){
+        List<PreparedJob> jobs=load(c);
+        jobs.removeIf(j->id.equals(j.id));
+        save(c,jobs);
+    }
+
     public static void delete(Context c,String id){
         List<PreparedJob> jobs=load(c);
-        jobs.removeIf(j->{if(id.equals(j.id)){try{new File(j.filePath).delete();}catch(Exception ignored){}return true;}return false;});
+        jobs.removeIf(j->{
+            if(!id.equals(j.id))return false;
+            try{new File(j.filePath).delete();}catch(Exception ignored){}
+            for(PreparedJob part:j.mergedParts()){
+                try{
+                    File partFile=new File(part.filePath);
+                    if(!partFile.getAbsolutePath().equals(j.filePath))partFile.delete();
+                }catch(Exception ignored){}
+            }
+            return true;
+        });
         save(c,jobs);
     }
 }

@@ -10,7 +10,7 @@ public final class PreparedJobSender {
     public static void send(Context c,PreparedJob job) throws Exception{
         Profile p=SecureStore.find(c,job.profileId);
         if(p==null)throw new IllegalStateException("Versandprofil nicht mehr vorhanden.");
-        File source=new File(job.filePath);if(!source.exists())throw new IllegalStateException("Vorbereitete PDF fehlt.");
+        File source=PreparedJobStore.ensureFile(c,job);
         File corrected=null;
         try{
             File outgoing=source;

@@ -46,16 +46,18 @@ public final class PdfMergeUtil {
         PDFBoxResourceLoader.init(c.getApplicationContext());
         File out=File.createTempFile("letter-separated-",".pdf",c.getCacheDir());
         try(PDDocument result=new PDDocument()){
+            PDFMergerUtility merger=new PDFMergerUtility();
             for(int i=0;i<items.size();i++){
                 OutboxItem item=items.get(i);
                 try(InputStream in=c.getContentResolver().openInputStream(item.asUri())){
                     if(in==null)throw new IllegalStateException("PDF kann nicht geöffnet werden: "+item.name);
                     try(PDDocument src=PDDocument.load(in,MemoryUsageSetting.setupTempFileOnly())){
-                        for(int p=0;p<src.getNumberOfPages();p++)result.importPage(src.getPage(p));
-                        if(i<items.size()-1&&src.getNumberOfPages()%2==1){
-                            PDPage reference=src.getPage(src.getNumberOfPages()-1);
-                            result.addPage(new PDPage(reference.getMediaBox()));
-                        }
+                        int pages=src.getNumberOfPages();
+                        com.tom_roush.pdfbox.pdmodel.common.PDRectangle media=pages>0
+                                ?new com.tom_roush.pdfbox.pdmodel.common.PDRectangle(src.getPage(pages-1).getMediaBox().getCOSArray())
+                                :com.tom_roush.pdfbox.pdmodel.common.PDRectangle.A4;
+                        merger.appendDocument(result,src);
+                        if(i<items.size()-1&&pages%2==1)result.addPage(new PDPage(media));
                     }
                 }
             }
@@ -72,14 +74,18 @@ public final class PdfMergeUtil {
         PDFBoxResourceLoader.init(c.getApplicationContext());
         File out=File.createTempFile("prepared-merge-",".pdf",c.getCacheDir());
         try(PDDocument result=new PDDocument()){
+            PDFMergerUtility merger=new PDFMergerUtility();
             for(int i=0;i<jobs.size();i++){
                 PreparedJob job=jobs.get(i);
-                try(PDDocument src=PDDocument.load(new File(job.filePath))){
-                    for(int p=0;p<src.getNumberOfPages();p++)result.importPage(src.getPage(p));
-                    if(duplex&&i<jobs.size()-1&&src.getNumberOfPages()%2==1){
-                        PDPage blank=new PDPage(src.getPage(src.getNumberOfPages()-1).getMediaBox());
-                        result.addPage(blank);
-                    }
+                File source=new File(job.filePath);
+                if(!source.exists())throw new IllegalStateException("Vorbereitete PDF fehlt: "+job.name);
+                try(PDDocument src=PDDocument.load(source,MemoryUsageSetting.setupTempFileOnly())){
+                    int pages=src.getNumberOfPages();
+                    com.tom_roush.pdfbox.pdmodel.common.PDRectangle media=pages>0
+                            ?new com.tom_roush.pdfbox.pdmodel.common.PDRectangle(src.getPage(pages-1).getMediaBox().getCOSArray())
+                            :com.tom_roush.pdfbox.pdmodel.common.PDRectangle.A4;
+                    merger.appendDocument(result,src);
+                    if(duplex&&i<jobs.size()-1&&pages%2==1)result.addPage(new PDPage(media));
                 }
             }
             result.save(out);
