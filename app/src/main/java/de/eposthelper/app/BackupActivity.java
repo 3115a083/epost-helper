@@ -88,7 +88,7 @@ public class BackupActivity extends AppCompatActivity {
 
         LinearLayout transfer=new LinearLayout(this);transfer.setOrientation(LinearLayout.VERTICAL);
         transfer.addView(UiKit.heading(this,"Android-/Samsung-Geräteübertragung",18));
-        TextView t=UiKit.body(this,"Android Backup und Geräteübertragung dürfen eine portable Kopie von Einstellungen, Profilkonfiguration und Statistiken sichern. API-Keys werden dabei ausdrücklich entfernt. Zugangsdaten, die kein API-Key sind, werden nur über die verschlüsselte Plattform-Sicherung übertragen. Vorbereitete PDFs werden nicht synchronisiert.");
+        TextView t=UiKit.body(this,"Android Backup und Geräteübertragung dürfen eine portable Kopie von Einstellungen, Profilkonfiguration und Statistiken sichern. API-Keys werden dabei ausdrücklich entfernt. Zugangsdaten, die kein API-Key sind, werden nur über die verschlüsselte Plattform-Sicherung übertragen. Vorbereitete PDFs werden nicht synchronisiert. Der Importordner muss auf einem neuen Gerät erneut ausgewählt werden, weil Android SAF-Ordnerrechte nicht zuverlässig übertragbar sind.");
         t.setTextSize(13);t.setPadding(0,UiKit.dp(this,6),0,0);transfer.addView(t);
         root.addView(UiKit.surfaceCard(this,transfer));
 
