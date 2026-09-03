@@ -50,7 +50,7 @@ public class MainActivity extends AppCompatActivity {
                             Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
                 }catch(Exception ignored){}
                 SettingsStore.setOutboxFolder(this,uri.toString());
-                int imported=OutboxStore.importFolder(this);
+                int imported=OutboxStore.importFolder(this)+AutoFolderPresets.importPrepared(this);
                 if(currentTab==3)render();
                 Snackbar.make(content,imported>0?imported+" PDF(s) importiert.":"Druckausgangsordner gespeichert.",Snackbar.LENGTH_SHORT).show();
             });
@@ -70,12 +70,14 @@ public class MainActivity extends AppCompatActivity {
         buildShell();
         setupBackNavigation();
         OutboxStore.importFolder(this);
+        AutoFolderPresets.importPrepared(this);
         render();
     }
 
     @Override protected void onResume(){
         super.onResume();
         OutboxStore.importFolder(this);
+        AutoFolderPresets.importPrepared(this);
         if(content!=null)render();
     }
 
