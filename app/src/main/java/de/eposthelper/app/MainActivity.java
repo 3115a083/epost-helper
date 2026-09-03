@@ -227,7 +227,9 @@ public class MainActivity extends AppCompatActivity {
         TextView countLabel=UiKit.heroBody(this,summary.count==1?" Brief":" Briefe");
         statRow.addView(countLabel);
         View gap=new View(this);statRow.addView(gap,new LinearLayout.LayoutParams(0,1,1f));
-        String costText=summary.knownCostCount==0?"Kosten: ?":String.format(java.util.Locale.GERMANY,"Kosten: %.2f €",summary.cost);
+        String costText;
+        if(summary.knownCostCount==0)costText=summary.count==0?"Kosten: 0,00 €":"Kosten: ?";
+        else costText=String.format(java.util.Locale.GERMANY,"Kosten: %.2f €",summary.cost)+(summary.unknownCostCount>0?" + ?":"");
         statRow.addView(UiKit.heroBody(this,costText));
         hero.addView(statRow);
 
