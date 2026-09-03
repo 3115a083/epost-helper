@@ -28,7 +28,7 @@ public class ProfileEditActivity extends AppCompatActivity {
     private EditText name,url,user,secret,pin,sshKey;
     private Spinner provider,type,registered;
     private MaterialSwitch active,duplex,color,remoteAddressCorrection,showBalance;
-    private LinearLayout credentials;
+    private LinearLayout credentials,accountCard;
     private TextView routeHelp;
 
     @Override protected void onCreate(Bundle b){
@@ -37,8 +37,8 @@ public class ProfileEditActivity extends AppCompatActivity {
         SettingsStore.applyDynamicColors(this);
         String id=getIntent().getStringExtra("profileId");
         profile=id==null?new Profile():SecureStore.find(this,id);
-        if(id==null&&"Standard".equals(profile.name))profile.name="Deutsche Post";
         if(profile==null)profile=new Profile();
+        if(id==null&&"Standard".equals(profile.name))profile.name="Deutsche Post";
         render();
     }
 
@@ -47,7 +47,8 @@ public class ProfileEditActivity extends AppCompatActivity {
         e.setPadding(UiKit.dp(this,16),UiKit.dp(this,12),UiKit.dp(this,16),UiKit.dp(this,12));
         android.graphics.drawable.GradientDrawable bg=new android.graphics.drawable.GradientDrawable();
         bg.setColor(UiKit.resolveSurface(this));bg.setCornerRadius(UiKit.dp(this,18));
-        bg.setStroke(UiKit.dp(this,1),androidx.core.graphics.ColorUtils.setAlphaComponent(UiKit.resolveSecondaryText(this),48));e.setBackground(bg);
+        bg.setStroke(UiKit.dp(this,1),androidx.core.graphics.ColorUtils.setAlphaComponent(UiKit.resolveSecondaryText(this),48));
+        e.setBackground(bg);
         if(password)e.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_VARIATION_PASSWORD);
         return e;
     }
@@ -77,7 +78,7 @@ public class ProfileEditActivity extends AppCompatActivity {
         ScrollView scroll=new ScrollView(this);
         LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setPadding(UiKit.dp(this,18),0,UiKit.dp(this,18),UiKit.dp(this,28));scroll.addView(root);
 
-        LinearLayout basic=cardBody("Anbieter & Profil","Ein Profil ist ein Zugang zu einem bestehenden Briefdienst. Versandoptionen können später direkt im Android-Druckdialog angepasst werden.");
+        LinearLayout basic=cardBody("Anbieter & Profil","Ein Profil ist ein Zugang zu einem bestehenden Briefdienst.");
         LinearLayout providerRow=new LinearLayout(this);providerRow.setGravity(Gravity.CENTER_VERTICAL);
         ImageView logo=new ImageView(this);logo.setContentDescription("Anbieterlogo");providerRow.addView(logo,new LinearLayout.LayoutParams(UiKit.dp(this,46),UiKit.dp(this,46)));
         provider=new Spinner(this);provider.setAdapter(new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,new String[]{"Deutsche Post","LetterXpress"}));
@@ -85,10 +86,6 @@ public class ProfileEditActivity extends AppCompatActivity {
         providerRow.addView(provider,new LinearLayout.LayoutParams(0,UiKit.dp(this,54),1f));basic.addView(providerRow);
         name=field("Profilname",profile.name,false);addField(basic,name);
         active=new MaterialSwitch(this);active.setText("Profil aktiv");active.setChecked(profile.active);basic.addView(active);
-        showBalance=new MaterialSwitch(this);
-        showBalance.setText("Guthaben auf der Startseite anzeigen");
-        showBalance.setChecked(profile.showBalanceOnHome);
-        basic.addView(showBalance);
         root.addView(UiKit.surfaceCard(this,basic));
 
         LinearLayout connection=cardBody("Verbindung","");
@@ -104,12 +101,12 @@ public class ProfileEditActivity extends AppCompatActivity {
         sshKey=field("SFTP Host-Key-Fingerprint",profile.sshHostKey,false);addField(credentials,sshKey);
         root.addView(UiKit.surfaceCard(this,credentials));
 
-        LinearLayout account=cardBody("LetterXpress Anzeige","Optionale Kontoinformationen für die Startseite.");
+        accountCard=cardBody("LetterXpress Anzeige","Optionale Kontoinformationen für die Startseite.");
         showBalance=new MaterialSwitch(this);
         showBalance.setText("Guthaben auf der Startseite anzeigen");
-        showBalance.setChecked(profile.showBalance);
-        account.addView(showBalance);
-        root.addView(UiKit.surfaceCard(this,account));
+        showBalance.setChecked(profile.showBalanceOnHome);
+        accountCard.addView(showBalance);
+        root.addView(UiKit.surfaceCard(this,accountCard));
 
         LinearLayout defaults=cardBody("Standard-Versand","Diese Werte sind Startwerte. Im Android-Druckdialog kannst du sie pro Brief überschreiben.");
         duplex=new MaterialSwitch(this);duplex.setText("Doppelseitig");duplex.setChecked(profile.duplex);defaults.addView(duplex);
@@ -122,11 +119,7 @@ public class ProfileEditActivity extends AppCompatActivity {
         remoteAddressCorrection.setText("Adresskorrektur ist im Deutsche-Post-Ziel eingerichtet");
         remoteAddressCorrection.setChecked(profile.addressCorrection);
         defaults.addView(remoteAddressCorrection);
-        showBalance=new MaterialSwitch(this);
-        showBalance.setText("Guthaben auf der Startseite anzeigen");
-        showBalance.setChecked(profile.showBalanceOnHome);
-        defaults.addView(showBalance);
-        TextView addressHelp=UiKit.body(this,"Quellbereiche für Absender und Empfänger am eigenen Brieflayout speichern. Bei LetterXpress kann die App diese Bereiche vor dem Versand lokal neu positionieren. Bei Deutsche Post verhindert die Kennzeichnung eine doppelte Korrektur, wenn der Sammelkorb bereits selbst korrigiert.");
+        TextView addressHelp=UiKit.body(this,"Quellbereiche für Absender und Empfänger am eigenen Brieflayout speichern. Bei LetterXpress kann die App diese Bereiche vor dem Versand lokal neu positionieren.");
         addressHelp.setTextSize(13);addressHelp.setPadding(0,UiKit.dp(this,8),0,UiKit.dp(this,8));defaults.addView(addressHelp);
         MaterialButton helper=UiKit.tonal(this,"Adressbereiche konfigurieren");
         helper.setOnClickListener(v->{collect();saveQuiet();Intent i=new Intent(this,AddressConfigActivity.class);i.putExtra("profileId",profile.id);startActivity(i);});
@@ -158,7 +151,7 @@ public class ProfileEditActivity extends AppCompatActivity {
         if(!getIntent().hasExtra("profileId")&&("Deutsche Post".equals(currentName)||"LetterXpress".equals(currentName)||"Standard".equals(currentName)))
             name.setText(lxp?"LetterXpress":"Deutsche Post");
         logo.setImageResource(lxp?R.drawable.ic_provider_lxp:R.drawable.ic_provider_post);
-        String current=type.getSelectedItem()==null?profile.type:String.valueOf(type.getSelectedItem());
+
         String[] types=lxp?new String[]{"LetterXpress API","LetterXpress SFTP"}:new String[]{"Sammelkorb / WebDAV","Netzwerkdrucker / IPP"};
         if(type.getAdapter()==null||type.getCount()!=2||((String)type.getItemAtPosition(0)).startsWith("LetterXpress")!=lxp){
             type.setAdapter(new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,types));
@@ -167,21 +160,19 @@ public class ProfileEditActivity extends AppCompatActivity {
             if(!lxp&&Profile.TYPE_IPP.equals(profile.type))idx=1;
             type.setSelection(idx);
         }
+
         int route=type.getSelectedItemPosition();
         boolean api=lxp&&route==0,sftp=lxp&&route==1,ipp=!lxp&&route==1;
-        showBalance.setVisibility(api?View.VISIBLE:View.GONE);
+        accountCard.setVisibility(api?View.VISIBLE:View.GONE);
         url.setVisibility(lxp?View.GONE:View.VISIBLE);
         if(!lxp)url.setHint(ipp?"IPPS-/HTTPS-Drucker-URL":"WebDAV-HTTPS-URL");
         user.setHint(api?"LetterXpress Benutzername":sftp?"SFTP Benutzername":ipp?"Optionaler IPP-Benutzername":"WebDAV Benutzername");
         secret.setHint(api?"LetterXpress API-Key":sftp?"SFTP Passwort":"WebDAV Passwort");
         secret.setVisibility(ipp?View.GONE:View.VISIBLE);
         remoteAddressCorrection.setVisibility(lxp?View.GONE:View.VISIBLE);
-        if(showBalance!=null)showBalance.getParent().requestLayout();
-        if(showBalance!=null)((View)showBalance.getParent()).setVisibility(api?View.VISIBLE:View.GONE);
-        showBalance.setVisibility(api?View.VISIBLE:View.GONE);
         pin.setVisibility(sftp?View.GONE:View.VISIBLE);
         sshKey.setVisibility(sftp?View.VISIBLE:View.GONE);
-        routeHelp.setText(api?"REST API v3. Unterstützt Preisabfrage und Testmodus."
+        routeHelp.setText(api?"REST API v3. Unterstützt Preisabfrage, Historie und Guthaben."
                 :sftp?"SFTP/SSH auf sftp.letterxpress.de:279. Versandoptionen werden per FILECODE übertragen."
                 :ipp?"Automatischer E-POST-Netzwerkdrucker."
                 :"E-POST Sammelkorb über WebDAV.");
@@ -198,20 +189,20 @@ public class ProfileEditActivity extends AppCompatActivity {
         profile.url=lxp?(Profile.TYPE_LXP_API.equals(profile.type)?"https://api.letterxpress.de/v3":"sftp://sftp.letterxpress.de:279"):text(url);
         profile.username=text(user);
         if(Profile.TYPE_LXP_API.equals(profile.type)){profile.apiKey=text(secret);profile.password="";}
-        else{profile.password=text(secret);}
+        else profile.password=text(secret);
         profile.certificatePin=text(pin);profile.sshHostKey=text(sshKey);
         profile.duplex=duplex.isChecked();profile.color=color.isChecked();profile.registeredMail=String.valueOf(registered.getSelectedItem());
-        profile.addressCorrection=!lxp&&remoteAddressCorrection!=null&&remoteAddressCorrection.isChecked();
-        profile.showBalance=lxp&&Profile.TYPE_LXP_API.equals(profile.type)&&showBalance!=null&&showBalance.isChecked();
-        profile.showBalanceOnHome=lxp&&Profile.TYPE_LXP_API.equals(profile.type)&&showBalance!=null&&showBalance.isChecked();
-        profile.showBalanceOnHome=showBalance==null||showBalance.isChecked();
+        profile.addressCorrection=!lxp&&remoteAddressCorrection.isChecked();
+        profile.showBalanceOnHome=lxp&&Profile.TYPE_LXP_API.equals(profile.type)&&showBalance.isChecked();
     }
 
     private void persist() throws Exception{
         List<Profile> list=new ArrayList<>(SecureStore.load(this));boolean found=false;
         for(int i=0;i<list.size();i++)if(list.get(i).id.equals(profile.id)){list.set(i,profile);found=true;break;}
-        if(!found)list.add(profile);SecureStore.save(this,list);
+        if(!found)list.add(profile);
+        SecureStore.save(this,list);
     }
+
     private void saveQuiet(){try{persist();}catch(Exception ignored){}}
 
     private void test(MaterialButton anchor){
