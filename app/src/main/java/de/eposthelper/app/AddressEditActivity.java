@@ -44,6 +44,7 @@ public class AddressEditActivity extends AppCompatActivity {
     private MaterialSwitch snap;
     private TextView hint;
     private TextView previewStatus;
+    private Bitmap originalBitmap;
 
     @Override protected void onCreate(Bundle b){
         SettingsStore.applySavedAppearance(this);
@@ -188,7 +189,7 @@ public class AddressEditActivity extends AppCompatActivity {
 
         setContentView(page);
         SystemUi.apply(this,page);
-        applyMode();
+        updateHint();
     }
 
     private void saveCurrentBoxes(){
@@ -248,49 +249,42 @@ public class AddressEditActivity extends AppCompatActivity {
             previewStatus.setText("PDF-Datei ist nicht mehr verfügbar.");
             return;
         }
-        applyMode();
-    }
-
-    private void renderSourcePreview(){
-        File file=sourceFile();
-        if(file==null||!file.exists())return;
-        previewStatus.setText("Original wird geladen…");
+        previewStatus.setText("PDF wird geladen…");
         new Thread(()->{
             try{
                 Bitmap bitmap=PdfPreviewRenderer.renderFirstPage(file,1400,PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
                 runOnUiThread(()->{
-                    if(!sourceMode){if(!bitmap.isRecycled())bitmap.recycle();return;}
-                    preview.setBitmap(bitmap);
-                    previewStatus.setText("Original · Seite 1");
+                    if(originalBitmap!=null&&!originalBitmap.isRecycled())originalBitmap.recycle();
+                    originalBitmap=bitmap;
+                    applyMode();
                 });
             }catch(Exception e){
-                runOnUiThread(()->{previewStatus.setText("PDF konnte nicht angezeigt werden.");DebugUtil.error(this,preview,"PDF-Vorschau",e);});
+                runOnUiThread(()->{
+                    previewStatus.setText("PDF konnte nicht angezeigt werden.");
+                    DebugUtil.error(this,preview,"PDF-Vorschau",e);
+                });
             }
-        },"address-source-preview").start();
+        },"address-preview-load").start();
+    }
+
+    private void renderSourcePreview(){
+        if(originalBitmap==null||originalBitmap.isRecycled())return;
+        Bitmap copy=originalBitmap.copy(Bitmap.Config.ARGB_8888,false);
+        preview.setBitmap(copy);
+        previewStatus.setText("Original · Seite 1");
     }
 
     private void renderTargetPreview(){
-        File file=sourceFile();
-        if(file==null||!file.exists())return;
-        final RectF ss=new RectF(sourceSender),sr=new RectF(sourceRecipient),ts=new RectF(targetSender),tr=new RectF(targetRecipient);
-        previewStatus.setText("Zielposition wird erzeugt…");
-        new Thread(()->{
-            File corrected=null;
-            try{
-                corrected=AddressCorrectionProcessor.apply(this,file,ss,sr,ts,tr);
-                Bitmap bitmap=PdfPreviewRenderer.renderFirstPage(corrected,1400,PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
-                if(corrected!=null)corrected.delete();
-                runOnUiThread(()->{
-                    if(sourceMode){if(!bitmap.isRecycled())bitmap.recycle();return;}
-                    preview.setBitmap(bitmap);
-                    preview.setBoxes(ts,tr);
-                    previewStatus.setText("Zielposition · tatsächliche PDF-Ausgabe");
-                });
-            }catch(Exception e){
-                if(corrected!=null)corrected.delete();
-                runOnUiThread(()->{previewStatus.setText("Zielvorschau konnte nicht erzeugt werden.");DebugUtil.error(this,preview,"Adress-Zielvorschau",e);});
-            }
-        },"address-target-preview").start();
+        if(originalBitmap==null||originalBitmap.isRecycled())return;
+        try{
+            Bitmap bitmap=AddressPreviewComposer.compose(originalBitmap,sourceSender,sourceRecipient,targetSender,targetRecipient);
+            preview.setBitmap(bitmap);
+            preview.setBoxes(targetSender,targetRecipient);
+            previewStatus.setText("Zielposition · tatsächliche Verschiebung");
+        }catch(Exception e){
+            previewStatus.setText("Zielvorschau konnte nicht erzeugt werden.");
+            DebugUtil.error(this,preview,"Adress-Zielvorschau",e);
+        }
     }
 
     private void save(){
@@ -308,6 +302,7 @@ public class AddressEditActivity extends AppCompatActivity {
 
     @Override protected void onDestroy(){
         if(preview!=null)preview.clearBitmap();
+        if(originalBitmap!=null&&!originalBitmap.isRecycled())originalBitmap.recycle();
         super.onDestroy();
     }
 }
