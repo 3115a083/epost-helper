@@ -554,7 +554,7 @@ public class MainActivity extends AppCompatActivity {
                     int colon=id.indexOf(':');
                     String volume=colon>=0?id.substring(0,colon):id;
                     String path=colon>=0?id.substring(colon+1):"";
-                    String root="primary".equalsIgnoreCase(volume)?"Interner Speicher":volume;
+                    String root="primary".equalsIgnoreCase(volume)?"/storage/emulated/0":"/storage/"+volume;
                     return path.isBlank()?root:root+"/"+path;
                 }
             }
