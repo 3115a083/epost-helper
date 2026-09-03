@@ -44,9 +44,6 @@ public class MainActivity extends AppCompatActivity {
     private List<RecentLetter> recentCache=new ArrayList<>();
     private String balanceCache="";
     private boolean recentLoaded=false;
-    private String outboxCostCache="";
-    private String outboxCostSignature="";
-    private boolean outboxCostLoading=false;
     private String queueCostCache="";
     private boolean queueCostLoading=false;
 
@@ -213,6 +210,7 @@ public class MainActivity extends AppCompatActivity {
             refresh.setMinWidth(0);refresh.setPadding(UiKit.dp(this,12),0,UiKit.dp(this,12),0);
             refresh.setOnClickListener(v->{
                 recentCache.clear();
+                recentLoaded=false;
                 if(balanceProfile!=null)balanceCache="";
                 queueCostCache="";
                 loadRecent(api,true);
@@ -222,7 +220,7 @@ public class MainActivity extends AppCompatActivity {
             content.addView(titleRow);
 
             recentContainer=new LinearLayout(this);recentContainer.setOrientation(LinearLayout.VERTICAL);content.addView(recentContainer);
-            if(recentCache.isEmpty()||(balanceProfile!=null&&balanceCache.isBlank()))loadRecent(api,false);else showRecent(recentCache);
+            if(!recentLoaded)loadRecent(api,false);else showRecent(recentCache);
         }
 
         boolean hasPost=profiles.stream().anyMatch(p->p.active&&Profile.PROVIDER_POST.equals(p.provider));
@@ -293,7 +291,7 @@ public class MainActivity extends AppCompatActivity {
                 Profile balanceApi=firstBalanceApi(SecureStore.load(this));
                 if(balanceApi!=null)balance=LetterXpressApiClient.balance(balanceApi);
                 runOnUiThread(()->{
-                    historyLoading=false;recentCache=jobs;balanceCache=balance;
+                    historyLoading=false;recentLoaded=true;recentCache=jobs;balanceCache=balance;
                     if(currentTab==0){render();}
                 });
             }catch(Exception e){
@@ -336,47 +334,6 @@ public class MainActivity extends AppCompatActivity {
             case "draft":return "Postbox";
             default:return status;
         }
-    }
-
-    private void updateOutboxCostAsync(List<PreparedJob> jobs){
-        StringBuilder sig=new StringBuilder();
-        for(PreparedJob j:jobs){
-            File f=new File(j.filePath);
-            sig.append(j.id).append('|').append(j.profileId).append('|').append(j.color).append('|')
-                    .append(j.duplex).append('|').append(j.registered).append('|').append(j.c4).append('|')
-                    .append(j.shipping).append('|').append(f.exists()?f.length():0).append(';');
-        }
-        String signature=sig.toString();
-        if(signature.equals(outboxCostSignature)||outboxCostLoading)return;
-        outboxCostLoading=true;
-        new Thread(()->{
-            double total=0;
-            int unknown=0;
-            for(PreparedJob j:jobs){
-                try{
-                    Profile p=SecureStore.find(this,j.profileId);
-                    if(p==null||DebugProfileManager.isDebug(p)){unknown++;continue;}
-                    if(Profile.PROVIDER_LETTERXPRESS.equals(p.provider)){
-                        int pages=PdfMergeUtil.countPages(new File(j.filePath));
-                        double price=LetterXpressPriceEstimator.gross(j.options(),pages);
-                        if(price>=0)total+=price;else unknown++;
-                    }else{
-                        unknown++;
-                    }
-                }catch(Exception e){unknown++;}
-            }
-            final String value;
-            if(jobs.isEmpty())value="0,00 €";
-            else if(total>0)value=String.format(java.util.Locale.GERMANY,"ca. %.2f €",total);
-            else value="k. A.";
-            final int unknownCount=unknown;
-            runOnUiThread(()->{
-                outboxCostLoading=false;
-                outboxCostSignature=signature;
-                outboxCostCache=value+(unknownCount>0&&total>0?" +":"");
-                if(currentTab==0)render();
-            });
-        },"outbox-cost").start();
     }
 
     private MaterialCardView metric(String label,String value,String sub){
