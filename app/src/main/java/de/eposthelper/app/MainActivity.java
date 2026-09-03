@@ -634,12 +634,20 @@ public class MainActivity extends AppCompatActivity {
                     int colon=id.indexOf(':');
                     String volume=colon>=0?id.substring(0,colon):id;
                     String path=colon>=0?id.substring(colon+1):"";
-                    String root="primary".equalsIgnoreCase(volume)?"/storage/emulated/0":"/storage/"+volume;
+                    String root="primary".equalsIgnoreCase(volume)?"Interner Speicher":"Speicher "+volume;
                     return path.isBlank()?root:root+"/"+path;
                 }
             }
-            androidx.documentfile.provider.DocumentFile f=androidx.documentfile.provider.DocumentFile.fromTreeUri(this,parsed);
-            if(f!=null&&f.getName()!=null&&!f.getName().isBlank())return f.getName();
+            String authority=parsed.getAuthority();
+            String treeId=null;
+            try{treeId=android.provider.DocumentsContract.getTreeDocumentId(parsed);}catch(Exception ignored){}
+            if(treeId!=null&&!treeId.isBlank()){
+                String name=treeId;
+                int slash=Math.max(name.lastIndexOf('/'),name.lastIndexOf(':'));
+                if(slash>=0&&slash+1<name.length())name=name.substring(slash+1);
+                if(!name.isBlank())return (authority==null||authority.isBlank()?"Dokumentordner":authority)+" · "+name;
+            }
+            if(authority!=null&&!authority.isBlank())return "Dokumentordner · "+authority;
         }catch(Exception ignored){}
         return "Ausgewählter Dokumentordner";
     }

@@ -52,6 +52,9 @@ public class OutboxActivity extends AppCompatActivity {
     private TextView orderPreviewTitle;
     private TextView orderPreviewMeta;
     private Bitmap orderPreviewBitmap;
+    private final java.util.Map<String,Integer> pageCountCache=new java.util.HashMap<>();
+    private boolean pageCountLoading=false;
+    private int mergedPageCount=0;
 
     private String selectedProfileId;
     private MaterialSwitch color,duplex,localCorrection,c4,mergeLetters,keepSheetBoundaries;
@@ -118,9 +121,9 @@ public class OutboxActivity extends AppCompatActivity {
                     targetSender=new RectF(editingPrepared.targetSender);
                     targetRecipient=new RectF(editingPrepared.targetRecipient);
                     addressEdited=!sourceSender.isEmpty()&&!sourceRecipient.isEmpty()&&!targetSender.isEmpty()&&!targetRecipient.isEmpty();
-                    try{previewBitmap=renderFirstPage(f,900);}catch(Exception ignored){}
                     step=3;
                     renderStep();
+                    loadPreparedPreviewAsync(f);
                 }
             }
         }
@@ -180,6 +183,44 @@ public class OutboxActivity extends AppCompatActivity {
         if(root==null)return;
         allItems=OutboxStore.load(this);
         if(step==1)renderStep();
+        loadPageCountsAsync();
+    }
+
+    private void loadPageCountsAsync(){
+        if(pageCountLoading)return;
+        List<OutboxItem> missing=new ArrayList<>();
+        for(OutboxItem item:allItems)if(!pageCountCache.containsKey(item.uri))missing.add(item);
+        if(missing.isEmpty())return;
+        pageCountLoading=true;
+        new Thread(()->{
+            java.util.Map<String,Integer> loaded=new java.util.HashMap<>();
+            for(OutboxItem item:missing)loaded.put(item.uri,PdfMergeUtil.countPages(this,item.asUri()));
+            runOnUiThread(()->{
+                pageCountLoading=false;
+                pageCountCache.putAll(loaded);
+                if(step==1)renderStep();
+                else if(step==2)loadOrderPreview();
+            });
+        },"outbox-page-counts").start();
+    }
+
+    private void loadPreparedPreviewAsync(File file){
+        new Thread(()->{
+            try{
+                Bitmap bitmap=renderFirstPage(file,900);
+                int pages=PdfMergeUtil.countPages(file);
+                runOnUiThread(()->{
+                    if(isFinishing()||isDestroyed()){
+                        if(!bitmap.isRecycled())bitmap.recycle();
+                        return;
+                    }
+                    if(previewBitmap!=null&&!previewBitmap.isRecycled())previewBitmap.recycle();
+                    previewBitmap=bitmap;
+                    mergedPageCount=pages;
+                    if(step==3)renderStep();
+                });
+            }catch(Exception ignored){}
+        },"prepared-preview").start();
     }
 
     private void renderStep(){
@@ -223,8 +264,9 @@ public class OutboxActivity extends AppCompatActivity {
 
             LinearLayout text=new LinearLayout(this);text.setOrientation(LinearLayout.VERTICAL);
             TextView name=UiKit.heading(this,item.name,15);name.setMaxLines(2);text.addView(name);
-            int pages=PdfMergeUtil.countPages(this,item.asUri());
-            TextView meta=UiKit.body(this,pages+" Seite"+(pages==1?"":"n")+(item.deleteAfterSend?" · Auto-Import":""));
+            Integer pages=pageCountCache.get(item.uri);
+            String pageText=pages==null?"Seiten werden ermittelt…":pages+" Seite"+(pages==1?"":"n");
+            TextView meta=UiKit.body(this,pageText+(item.deleteAfterSend?" · Auto-Import":""));
             meta.setTextSize(12);text.addView(meta);
             row.addView(text,new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1f));
             root.addView(UiKit.surfaceCard(this,row));
@@ -328,8 +370,8 @@ public class OutboxActivity extends AppCompatActivity {
         int index=Math.max(0,Math.min(previewIndex,working.size()-1));
         OutboxItem item=working.get(index);
         orderPreviewTitle.setText(item.name);
-        int pages=PdfMergeUtil.countPages(this,item.asUri());
-        orderPreviewMeta.setText((index+1)+" / "+working.size()+" · "+pages+" Seite"+(pages==1?"":"n"));
+        Integer pages=pageCountCache.get(item.uri);
+        orderPreviewMeta.setText((index+1)+" / "+working.size()+" · "+(pages==null?"Seiten werden ermittelt…":pages+" Seite"+(pages==1?"":"n")));
         orderPreviewImage.setImageDrawable(null);
         if(orderPreviewBitmap!=null&&!orderPreviewBitmap.isRecycled()){
             orderPreviewBitmap.recycle();
@@ -426,11 +468,12 @@ public class OutboxActivity extends AppCompatActivity {
             try{
                 File next=PdfMergeUtil.merge(this,snapshot);
                 Bitmap bitmap=renderFirstPage(next,900);
+                int pages=PdfMergeUtil.countPages(next);
                 runOnUiThread(()->{
                     if(merged!=null&&merged.exists())merged.delete();
                     if(previewBitmap!=null&&!previewBitmap.isRecycled())previewBitmap.recycle();
         if(orderPreviewBitmap!=null&&!orderPreviewBitmap.isRecycled())orderPreviewBitmap.recycle();
-                    merged=next;previewBitmap=bitmap;
+                    merged=next;previewBitmap=bitmap;mergedPageCount=pages;
                     if(advance){step=3;renderStep();}
                     else if(step==2)renderStep();
                 });
@@ -488,19 +531,22 @@ public class OutboxActivity extends AppCompatActivity {
             mergeBox.addView(mergeLetters);
 
             keepSheetBoundaries=new MaterialSwitch(this);
-            keepSheetBoundaries.setText("Quelldokumente auf getrennten Blättern halten");
+            keepSheetBoundaries.setText("Dokumente auf getrennten Blättern beginnen");
             keepSheetBoundaries.setChecked(true);
-            keepSheetBoundaries.setEnabled(duplex.isChecked());
             mergeBox.addView(keepSheetBoundaries);
 
-            TextView mergeHelp=UiKit.body(this,"Wenn „getrennte Blätter“ aktiv ist, fügt die App bei Duplex nur dann eine Leerseite zwischen zwei PDFs ein, wenn das vorherige Dokument eine ungerade Seitenzahl hat. Ist die Option aus, folgen die Seiten ohne zusätzliche Leerseite direkt aufeinander.");
+            TextView mergeHelp=UiKit.body(this,"An: Nach einem Dokument mit ungerader Seitenzahl fügt die App bei Duplex eine weiße Seite ein. Aus: Die PDFs werden ohne künstliche Leerseite direkt hintereinander zusammengeführt.");
             mergeHelp.setTextSize(12);mergeHelp.setPadding(0,UiKit.dp(this,4),0,0);mergeBox.addView(mergeHelp);
 
-            mergeLetters.setOnCheckedChangeListener((button,checked)->{
-                keepSheetBoundaries.setVisibility(checked?View.VISIBLE:View.GONE);
-                mergeHelp.setVisibility(checked?View.VISIBLE:View.GONE);
-            });
-            duplex.setOnCheckedChangeListener((button,checked)->keepSheetBoundaries.setEnabled(checked));
+            Runnable updateSheetOption=()->{
+                boolean visible=mergeLetters.isChecked()&&duplex.isChecked();
+                keepSheetBoundaries.setVisibility(visible?View.VISIBLE:View.GONE);
+                mergeHelp.setVisibility(visible?View.VISIBLE:View.GONE);
+            };
+            mergeLetters.setOnCheckedChangeListener((button,checked)->updateSheetOption.run());
+            duplex.setOnCheckedChangeListener((button,checked)->updateSheetOption.run());
+            keepSheetBoundaries.setOnClickListener(v->refreshProfiles());
+            updateSheetOption.run();
             root.addView(UiKit.surfaceCard(this,mergeBox));
         }
 
@@ -594,7 +640,7 @@ public class OutboxActivity extends AppCompatActivity {
                 if(compatible(candidate,o)){selectedProfileId=candidate.id;break;}
             }
         }
-        int pages=merged==null?0:PdfMergeUtil.countPages(merged);
+        int pages=effectiveMergedPageCount();
         boolean found=false;
         for(Profile p:profiles){
             if(!compatible(p,o))continue;
@@ -767,6 +813,18 @@ public class OutboxActivity extends AppCompatActivity {
 
     private boolean preserveSheetBoundaries(){
         return mergeAsOne()&&duplex!=null&&duplex.isChecked()&&keepSheetBoundaries!=null&&keepSheetBoundaries.isChecked();
+    }
+
+    private int effectiveMergedPageCount(){
+        if(!preserveSheetBoundaries()||working.size()<2)return mergedPageCount;
+        int pages=0;
+        for(int i=0;i<working.size();i++){
+            Integer count=pageCountCache.get(working.get(i).uri);
+            if(count==null)return mergedPageCount;
+            pages+=count;
+            if(i<working.size()-1&&count%2==1)pages++;
+        }
+        return pages;
     }
 
     private void fillPreparedJob(PreparedJob j,Profile p,JobOptions o){
