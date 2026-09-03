@@ -666,8 +666,8 @@ public class OutboxActivity extends AppCompatActivity {
 
         if(correctionRequested){
             if(!addressEdited){
-                targetSender=AddressLayoutRules.targetSender(p,o);
-                targetRecipient=AddressLayoutRules.targetRecipient(p,o);
+                targetSender=AddressLayoutRules.moveLike(sourceSender,AddressLayoutRules.targetSender(p,o));
+                targetRecipient=AddressLayoutRules.moveLike(sourceRecipient,AddressLayoutRules.targetRecipient(p,o));
             }
             addressPreview.setBoxes(targetSender,targetRecipient);
             addressPreview.setInteractive(false);
@@ -702,8 +702,8 @@ public class OutboxActivity extends AppCompatActivity {
         if(sourceSender.isEmpty())sourceSender=AddressLayoutRules.normalSender();
         if(sourceRecipient.isEmpty())sourceRecipient=AddressLayoutRules.normalRecipient();
         if(!addressEdited){
-            targetSender=AddressLayoutRules.targetSender(p,currentOptions());
-            targetRecipient=AddressLayoutRules.targetRecipient(p,currentOptions());
+            targetSender=AddressLayoutRules.moveLike(sourceSender,AddressLayoutRules.targetSender(p,currentOptions()));
+            targetRecipient=AddressLayoutRules.moveLike(sourceRecipient,AddressLayoutRules.targetRecipient(p,currentOptions()));
         }
 
         Intent intent=new Intent(this,AddressEditActivity.class);
@@ -720,8 +720,10 @@ public class OutboxActivity extends AppCompatActivity {
     private void updateLayoutHint(){
         Profile p=SecureStore.find(this,selectedProfileId);
         if(p==null)return;
-        if(addressPreview.hasCollision()){
-            layoutHint.setText("Adressbereich kollidiert mit einer reservierten Zone. Öffne „Groß bearbeiten“ und verschiebe die Zielposition.");
+        if(addressPreview.hasPostageCollision()){
+            layoutHint.setText("Adressbereich kollidiert mit dem Porto-/DV-Feld. Öffne die große Vorschau und korrigiere die Zielposition.");
+        }else if(addressPreview.hasWindowClip()){
+            layoutHint.setText("Ein Teil des Adressbereichs liegt außerhalb des Brief-Sichtfensters. Öffne die große Vorschau und prüfe die Zielposition.");
         }else if(localCorrection.isChecked()){
             layoutHint.setText(addressEdited
                     ?"Adresskorrektur aktiv. Original- und Zielbereiche wurden für diesen Brief bestätigt."
