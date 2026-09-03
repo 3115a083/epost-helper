@@ -27,7 +27,7 @@ public class ProfileEditActivity extends AppCompatActivity {
     private Profile profile;
     private EditText name,url,user,secret,pin,sshKey;
     private Spinner provider,type,registered;
-    private MaterialSwitch active,duplex,color,remoteAddressCorrection;
+    private MaterialSwitch active,duplex,color,remoteAddressCorrection,showBalance;
     private LinearLayout credentials;
     private TextView routeHelp;
 
@@ -111,6 +111,10 @@ public class ProfileEditActivity extends AppCompatActivity {
         remoteAddressCorrection.setText("Adresskorrektur ist im Deutsche-Post-Ziel eingerichtet");
         remoteAddressCorrection.setChecked(profile.addressCorrection);
         defaults.addView(remoteAddressCorrection);
+        showBalance=new MaterialSwitch(this);
+        showBalance.setText("Guthaben auf der Startseite anzeigen");
+        showBalance.setChecked(profile.showBalanceOnHome);
+        defaults.addView(showBalance);
         TextView addressHelp=UiKit.body(this,"Quellbereiche für Absender und Empfänger am eigenen Brieflayout speichern. Bei LetterXpress kann die App diese Bereiche vor dem Versand lokal neu positionieren. Bei Deutsche Post verhindert die Kennzeichnung eine doppelte Korrektur, wenn der Sammelkorb bereits selbst korrigiert.");
         addressHelp.setTextSize(13);addressHelp.setPadding(0,UiKit.dp(this,8),0,UiKit.dp(this,8));defaults.addView(addressHelp);
         MaterialButton helper=UiKit.tonal(this,"Adressbereiche konfigurieren");
@@ -160,6 +164,7 @@ public class ProfileEditActivity extends AppCompatActivity {
         secret.setHint(api?"LetterXpress API-Key":sftp?"SFTP Passwort":"WebDAV Passwort");
         secret.setVisibility(ipp?View.GONE:View.VISIBLE);
         remoteAddressCorrection.setVisibility(lxp?View.GONE:View.VISIBLE);
+        showBalance.setVisibility(api?View.VISIBLE:View.GONE);
         pin.setVisibility(sftp?View.GONE:View.VISIBLE);
         sshKey.setVisibility(sftp?View.VISIBLE:View.GONE);
         routeHelp.setText(api?"REST API v3. Unterstützt Preisabfrage und Testmodus."
@@ -183,6 +188,7 @@ public class ProfileEditActivity extends AppCompatActivity {
         profile.certificatePin=text(pin);profile.sshHostKey=text(sshKey);
         profile.duplex=duplex.isChecked();profile.color=color.isChecked();profile.registeredMail=String.valueOf(registered.getSelectedItem());
         profile.addressCorrection=!lxp&&remoteAddressCorrection!=null&&remoteAddressCorrection.isChecked();
+        profile.showBalanceOnHome=showBalance==null||showBalance.isChecked();
     }
 
     private void persist() throws Exception{
