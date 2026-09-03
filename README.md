@@ -17,7 +17,7 @@ Native Android app for sending PDF documents through existing accounts at **Deut
 
 ## Security model
 
-Cleartext `http://` and `ipp://` are rejected. Android cleartext networking is disabled. TLS 1.2/1.3, normal Android CA validation and hostname verification are enforced. The app has no “ignore certificate errors” switch. Optional per-profile SPKI pinning is available. Credentials, URLs and profile metadata are encrypted at rest with AES-256-GCM and a non-exportable Android Keystore key. Backups/device transfer of the profile store are disabled.
+Cleartext `http://` and `ipp://` are rejected. Android cleartext networking is disabled. TLS 1.2/1.3, normal Android CA validation and hostname verification are enforced. The app has no “ignore certificate errors” switch. Optional per-profile SPKI pinning is available. Credentials, URLs and profile metadata are encrypted at rest with AES-256-GCM and a non-exportable Android Keystore key. Manual backups are password-protected with PBKDF2-HMAC-SHA256 plus AES-256-GCM. Android cloud/device-transfer backup is restricted to a sanitized portable state and explicitly strips LetterXpress API keys.
 
 Certificate pinning is optional because pins must be rotated before the service certificate changes.
 
@@ -96,17 +96,17 @@ The in-app outbox uses a three-step workflow:
 2. Reorder them, remove files from the current shipment and review the merged first-page preview.
 3. Choose print options, inspect or correct the address layout, compare compatible profiles and estimated prices, then send.
 
-A Storage Access Framework folder can be configured for automatic import. PDFs are imported when the app starts or resumes, so no permanent filesystem watcher or background service is required. Auto-imported source files are deleted only after successful submission. If Android refuses deletion, the URI is blocked from re-import to prevent accidental duplicate submission.
+A Storage Access Framework folder can be configured as an import root. The app does not scan it on every start. Import is triggered manually from the prepared-output cart. Optional one-level subfolders encode common print presets such as color/monochrome, simplex/duplex, national/international, registered mail and address correction. The `debug` folder is never imported. Auto-imported source files are deleted only after successful submission.
 
 ## Address layout correction
 
 Profiles can store sender and recipient source rectangles from a representative PDF. During the final outbox step the app can locally reposition those areas before sending. Only the two small address regions are rasterized at print resolution; the rest of the PDF remains unchanged.
 
-For LetterXpress registered mail, the preview uses the current official registered-mail template geometry: sender zone at 20 mm / 45 mm, a 17 mm-high reserved DV-franking zone, and recipient zone below it. Collisions are shown in red. For Deutsche Post profiles marked as having server-side address correction enabled, local correction is disabled to avoid double correction.
+The address editor has separate source-selection and target-position modes. Target mode renders the actual moved sender/recipient content and overlays the provider's visible window plus postage/DV-franking zone. Collisions or clipping are shown in red. The same coordinates are used by the final PDF transformation before send.
 
 ## Shipment history
 
-LetterXpress API profiles can show recent jobs, status and reported costs on the home screen.
+LetterXpress API profiles can show recent jobs, status, balance and reported costs. The home hero provides paged statistics for the current month, previous month and current year. Per API profile, statistics can use only locally recorded sends or replace that profile's local LetterXpress events with server history to avoid duplicate counting.
 
 E-POST MAILER 7.0 documents its Journal only inside the Post & DHL business customer portal. No public Journal endpoint is documented for the WebDAV/IPP client workflow, so this app does not scrape the portal or store portal session credentials. A mixed Post/LetterXpress history will only be added if Deutsche Post provides a supported machine-readable Journal interface.
 
@@ -115,3 +115,14 @@ E-POST MAILER 7.0 documents its Journal only inside the Post & DHL business cust
 Each active profile appears as a printer. Android's advanced print options activity is used for per-document provider settings instead of creating a separate virtual printer for every option combination. Currently implemented per-job options are simplex/duplex, colour, supported registered-mail modes and LetterXpress C4. LetterXpress API profiles can show a provider price quote; SFTP profiles show a public-list-price estimate.
 
 The PDF address helper stores sender and recipient source areas for the user's layout. Automatic PDF repositioning is intentionally not enabled yet, so the UI does not claim that stored address regions are already applied to outgoing documents.
+
+
+## Backup and migration
+
+Settings, profiles and local send statistics can be exported to a password-protected `.epostbackup` file. The export includes credentials, including API keys, and is encrypted with PBKDF2-HMAC-SHA256 plus AES-256-GCM. Keep the backup password separately.
+
+For Android encrypted cloud backup and device-transfer workflows such as Android device migration or vendor transfer tools, the app writes a separate portable state. It includes settings, statistics and profile configuration, but LetterXpress API keys are removed before that state becomes eligible for platform backup. Prepared PDFs are never included.
+
+## Prepared output cart
+
+The bottom navigation contains a prepared-output cart. A prepared letter can be edited, deleted or sent later. Multiple documents can either remain separate letters or be merged for the same recipient. When duplex is selected, keeping source documents on separate physical sheets is optional; if enabled, an odd-page source document gets a blank separator page before the next document.
