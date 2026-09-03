@@ -85,6 +85,10 @@ public class ProfileEditActivity extends AppCompatActivity {
         providerRow.addView(provider,new LinearLayout.LayoutParams(0,UiKit.dp(this,54),1f));basic.addView(providerRow);
         name=field("Profilname",profile.name,false);addField(basic,name);
         active=new MaterialSwitch(this);active.setText("Profil aktiv");active.setChecked(profile.active);basic.addView(active);
+        showBalance=new MaterialSwitch(this);
+        showBalance.setText("Guthaben auf der Startseite anzeigen");
+        showBalance.setChecked(profile.showBalanceOnHome);
+        basic.addView(showBalance);
         root.addView(UiKit.surfaceCard(this,basic));
 
         LinearLayout connection=cardBody("Verbindung","");
@@ -158,6 +162,7 @@ public class ProfileEditActivity extends AppCompatActivity {
         }
         int route=type.getSelectedItemPosition();
         boolean api=lxp&&route==0,sftp=lxp&&route==1,ipp=!lxp&&route==1;
+        showBalance.setVisibility(api?View.VISIBLE:View.GONE);
         url.setVisibility(lxp?View.GONE:View.VISIBLE);
         if(!lxp)url.setHint(ipp?"IPPS-/HTTPS-Drucker-URL":"WebDAV-HTTPS-URL");
         user.setHint(api?"LetterXpress Benutzername":sftp?"SFTP Benutzername":ipp?"Optionaler IPP-Benutzername":"WebDAV Benutzername");
@@ -188,6 +193,7 @@ public class ProfileEditActivity extends AppCompatActivity {
         profile.certificatePin=text(pin);profile.sshHostKey=text(sshKey);
         profile.duplex=duplex.isChecked();profile.color=color.isChecked();profile.registeredMail=String.valueOf(registered.getSelectedItem());
         profile.addressCorrection=!lxp&&remoteAddressCorrection!=null&&remoteAddressCorrection.isChecked();
+        profile.showBalanceOnHome=lxp&&Profile.TYPE_LXP_API.equals(profile.type)&&showBalance!=null&&showBalance.isChecked();
         profile.showBalanceOnHome=showBalance==null||showBalance.isChecked();
     }
 
