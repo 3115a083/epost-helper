@@ -630,9 +630,11 @@ public class OutboxActivity extends AppCompatActivity {
             addressPreview.setInteractive(false);
         }
 
+        RectF window=DebugProfileManager.isDebug(p)?new RectF():AddressLayoutRules.window(p,o);
         RectF reserved=DebugProfileManager.isDebug(p)?new RectF():AddressLayoutRules.reserved(p,o);
         RectF safety=DebugProfileManager.isDebug(p)?new RectF():AddressLayoutRules.recipientSafety(p,o);
-        addressPreview.setReservedArea(reserved,reserved.isEmpty()?null:"Reserviert für Frankierung");
+        addressPreview.setWindowArea(window,window.isEmpty()?null:"Sichtfenster");
+        addressPreview.setReservedArea(reserved,reserved.isEmpty()?null:"Porto / DVF");
         addressPreview.setRecipientSafetyArea(safety,safety.isEmpty()?null:"Adress-Sicherheitsreserve");
 
         if(Profile.PROVIDER_POST.equals(p.provider)&&p.addressCorrection&&correctionRequested){
