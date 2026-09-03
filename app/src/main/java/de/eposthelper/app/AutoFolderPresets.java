@@ -76,6 +76,8 @@ public final class AutoFolderPresets {
                 if(alreadyImported(c,f.getUri().toString()))continue;
 
                 try{
+                    OutboxItem raw=OutboxStore.add(c,f.getUri(),f.getName()==null?"PDF":f.getName(),true,options,name);
+
                     PreparedJob job=new PreparedJob();
                     job.name=f.getName()==null?"Brief":f.getName();
                     job.color=options.color;
