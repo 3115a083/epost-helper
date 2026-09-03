@@ -43,6 +43,8 @@ public class MainActivity extends AppCompatActivity {
     private LinearLayout hiddenDebugBox;
     private List<RecentLetter> recentCache=new ArrayList<>();
     private String balanceCache="";
+    private String queueCostCache="";
+    private boolean queueCostLoading=false;
 
     private final ActivityResultLauncher<Uri> folderPicker=registerForActivityResult(
             new ActivityResultContracts.OpenDocumentTree(),uri->{
@@ -182,11 +184,19 @@ public class MainActivity extends AppCompatActivity {
         LinearLayout.LayoutParams hap=new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,50));hap.setMargins(0,UiKit.dp(this,12),0,0);hero.addView(heroAction,hap);
         content.addView(UiKit.hero(this,hero,g[0],g[1]));
 
+        Profile balanceProfile=firstBalanceApi(profiles);
         LinearLayout metrics=new LinearLayout(this);metrics.setOrientation(LinearLayout.HORIZONTAL);
-        metrics.addView(metric("Verbindungen",String.valueOf(connected),"verifiziert"),new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1f));
-        metrics.addView(new View(this),new LinearLayout.LayoutParams(UiKit.dp(this,12),1));
-        metrics.addView(metric("Ausgang",String.valueOf(prepared),prepared==1?"Brief":"Briefe"),new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1f));
+        if(balanceProfile!=null){
+            metrics.addView(metricCompact("Guthaben",balanceCache.isBlank()?"…":balanceCache.replace(" EUR"," €")),new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1f));
+            metrics.addView(new View(this),new LinearLayout.LayoutParams(UiKit.dp(this,6),1));
+        }
+        metrics.addView(metricCompact("Verbindungen",String.valueOf(connected)),new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1f));
+        metrics.addView(new View(this),new LinearLayout.LayoutParams(UiKit.dp(this,6),1));
+        metrics.addView(metricCompact("Ausgang",String.valueOf(prepared)),new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1f));
+        metrics.addView(new View(this),new LinearLayout.LayoutParams(UiKit.dp(this,6),1));
+        metrics.addView(metricCompact("Kosten",queueCostCache.isBlank()?"…":queueCostCache),new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1f));
         content.addView(metrics);
+        if(queueCostCache.isBlank())loadQueueCost();
 
         Profile api=firstLetterXpressApi(profiles);
         if(api!=null){
@@ -195,19 +205,18 @@ public class MainActivity extends AppCompatActivity {
             titleRow.addView(title,new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1f));
             MaterialButton refresh=UiKit.tonal(this,"Aktualisieren");
             refresh.setMinWidth(0);refresh.setPadding(UiKit.dp(this,12),0,UiKit.dp(this,12),0);
-            refresh.setOnClickListener(v->{recentCache.clear();balanceCache="";loadRecent(api,true);});
+            refresh.setOnClickListener(v->{
+                recentCache.clear();
+                if(balanceProfile!=null)balanceCache="";
+                queueCostCache="";
+                loadRecent(api,true);
+                loadQueueCost();
+            });
             titleRow.addView(refresh,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,UiKit.dp(this,44)));
             content.addView(titleRow);
 
-            LinearLayout balanceCard=new LinearLayout(this);balanceCard.setOrientation(LinearLayout.VERTICAL);
-            balanceCard.addView(UiKit.body(this,"LetterXpress Guthaben"));
-            TextView balanceValue=UiKit.heading(this,balanceCache.isBlank()?"Wird geladen…":balanceCache,22);
-            balanceValue.setTag("balanceValue");
-            balanceCard.addView(balanceValue);
-            content.addView(UiKit.surfaceCard(this,balanceCard));
-
             recentContainer=new LinearLayout(this);recentContainer.setOrientation(LinearLayout.VERTICAL);content.addView(recentContainer);
-            if(balanceCache.isBlank())loadRecent(api,false);else showRecent(recentCache);
+            if(recentCache.isEmpty()||(balanceProfile!=null&&balanceCache.isBlank()))loadRecent(api,false);else showRecent(recentCache);
         }
 
         boolean hasPost=profiles.stream().anyMatch(p->p.active&&Profile.PROVIDER_POST.equals(p.provider));
@@ -222,6 +231,51 @@ public class MainActivity extends AppCompatActivity {
         return null;
     }
 
+    private Profile firstBalanceApi(List<Profile> profiles){
+        for(Profile p:profiles)
+            if(p.active&&p.showBalanceOnHome&&Profile.PROVIDER_LETTERXPRESS.equals(p.provider)&&Profile.TYPE_LXP_API.equals(p.type))
+                return p;
+        return null;
+    }
+
+    private void loadQueueCost(){
+        if(queueCostLoading)return;
+        queueCostLoading=true;
+        new Thread(()->{
+            double known=0d;
+            int unknown=0;
+            try{
+                for(PreparedJob j:PreparedJobStore.load(this)){
+                    Profile p=SecureStore.find(this,j.profileId);
+                    if(p==null||DebugProfileManager.isDebug(p))continue;
+                    if(Profile.PROVIDER_LETTERXPRESS.equals(p.provider)){
+                        int pages=PdfMergeUtil.countPages(new File(j.filePath));
+                        double estimate=LetterXpressPriceEstimator.gross(j.options(),pages);
+                        if(estimate>=0)known+=estimate; else unknown++;
+                    }else{
+                        unknown++;
+                    }
+                }
+                String value;
+                if(known<=0&&unknown==0)value="0,00 €";
+                else if(known>0)value=String.format(java.util.Locale.GERMANY,"%.2f €",known)+(unknown>0?" + ?":"");
+                else value="?";
+                final String result=value;
+                runOnUiThread(()->{
+                    queueCostLoading=false;
+                    queueCostCache=result;
+                    if(currentTab==0)render();
+                });
+            }catch(Exception e){
+                runOnUiThread(()->{
+                    queueCostLoading=false;
+                    queueCostCache="?";
+                    if(currentTab==0)render();
+                });
+            }
+        },"queue-cost").start();
+    }
+
     private void loadRecent(Profile p,boolean force){
         if(historyLoading)return;
         historyLoading=true;
@@ -229,7 +283,9 @@ public class MainActivity extends AppCompatActivity {
         new Thread(()->{
             try{
                 List<RecentLetter> jobs=LetterXpressApiClient.recentJobs(p,5);
-                String balance=LetterXpressApiClient.balance(p);
+                String balance="";
+                Profile balanceApi=firstBalanceApi(SecureStore.load(this));
+                if(balanceApi!=null)balance=LetterXpressApiClient.balance(balanceApi);
                 runOnUiThread(()->{
                     historyLoading=false;recentCache=jobs;balanceCache=balance;
                     if(currentTab==0){render();}
@@ -282,6 +338,15 @@ public class MainActivity extends AppCompatActivity {
         TextView v=UiKit.heading(this,value,24);v.setPadding(0,UiKit.dp(this,5),0,0);box.addView(v);
         TextView s=UiKit.body(this,sub);s.setTextSize(12);box.addView(s);
         return UiKit.surfaceCard(this,box);
+    }
+
+    private MaterialCardView metricCompact(String label,String value){
+        LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setGravity(Gravity.CENTER);
+        TextView l=UiKit.body(this,label);l.setTextSize(10);l.setGravity(Gravity.CENTER);box.addView(l);
+        TextView v=UiKit.heading(this,value,16);v.setGravity(Gravity.CENTER);v.setSingleLine(true);v.setPadding(0,UiKit.dp(this,3),0,0);box.addView(v);
+        MaterialCardView card=UiKit.surfaceCard(this,box);
+        card.setContentPadding(UiKit.dp(this,7),UiKit.dp(this,9),UiKit.dp(this,7),UiKit.dp(this,9));
+        return card;
     }
 
     private MaterialCardView actionCard(int iconRes,String title,String subtitle,Runnable action){
