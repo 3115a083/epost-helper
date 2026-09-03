@@ -40,6 +40,33 @@ public final class PdfMergeUtil {
     }
 
 
+    public static File merge(Context c,List<OutboxItem> items,boolean keepDocumentSheetBoundaries) throws Exception{
+        if(!keepDocumentSheetBoundaries)return merge(c,items);
+        if(items==null||items.isEmpty())throw new IllegalArgumentException("Keine PDF ausgewählt");
+        PDFBoxResourceLoader.init(c.getApplicationContext());
+        File out=File.createTempFile("letter-separated-",".pdf",c.getCacheDir());
+        try(PDDocument result=new PDDocument()){
+            for(int i=0;i<items.size();i++){
+                OutboxItem item=items.get(i);
+                try(InputStream in=c.getContentResolver().openInputStream(item.asUri())){
+                    if(in==null)throw new IllegalStateException("PDF kann nicht geöffnet werden: "+item.name);
+                    try(PDDocument src=PDDocument.load(in,MemoryUsageSetting.setupTempFileOnly())){
+                        for(int p=0;p<src.getNumberOfPages();p++)result.importPage(src.getPage(p));
+                        if(i<items.size()-1&&src.getNumberOfPages()%2==1){
+                            PDPage reference=src.getPage(src.getNumberOfPages()-1);
+                            result.addPage(new PDPage(reference.getMediaBox()));
+                        }
+                    }
+                }
+            }
+            result.save(out);
+            return out;
+        }catch(Exception e){
+            out.delete();
+            throw e;
+        }
+    }
+
     public static File mergePrepared(Context c,List<PreparedJob> jobs,boolean duplex) throws Exception{
         if(jobs==null||jobs.isEmpty())throw new IllegalArgumentException("Keine vorbereiteten Briefe ausgewählt");
         PDFBoxResourceLoader.init(c.getApplicationContext());
