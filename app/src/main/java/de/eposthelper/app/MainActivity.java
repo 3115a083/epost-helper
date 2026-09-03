@@ -46,6 +46,10 @@ public class MainActivity extends AppCompatActivity {
     private boolean recentLoaded=false;
     private String queueCostCache="";
     private boolean queueCostLoading=false;
+    private int statsPeriodIndex=0;
+    private boolean statsRemoteLoading=false;
+    private boolean statsRemoteLoaded=false;
+    private List<RecentLetter> statsRemoteCache=new ArrayList<>();
 
     private final ActivityResultLauncher<Uri> folderPicker=registerForActivityResult(
             new ActivityResultContracts.OpenDocumentTree(),uri->{
@@ -172,36 +176,69 @@ public class MainActivity extends AppCompatActivity {
 
     private void renderHome(){
         List<Profile> profiles=SecureStore.load(this);
-        long connected=profiles.stream().filter(p->p.active&&p.connectionVerified&&!DebugProfileManager.isDebug(p)).count();
-        int queued=OutboxStore.load(this).size();
-        int prepared=PreparedJobStore.load(this).size();
         int[] g=SettingsStore.gradient(this);
+        Profile api=firstLetterXpressApi(profiles);
+        Profile statsApi=firstStatsApi(profiles);
+        Profile balanceProfile=firstBalanceApi(profiles);
+
+        SendStatsStore.Period[] periods={
+                SendStatsStore.Period.THIS_MONTH,
+                SendStatsStore.Period.LAST_MONTH,
+                SendStatsStore.Period.THIS_YEAR
+        };
+        String[] periodNames={
+                java.time.LocalDate.now().getMonth().getDisplayName(java.time.format.TextStyle.FULL,java.util.Locale.GERMANY)+" "+java.time.LocalDate.now().getYear(),
+                java.time.LocalDate.now().minusMonths(1).getMonth().getDisplayName(java.time.format.TextStyle.FULL,java.util.Locale.GERMANY)+" "+java.time.LocalDate.now().minusMonths(1).getYear(),
+                "Jahr "+java.time.LocalDate.now().getYear()
+        };
+        statsPeriodIndex=Math.max(0,Math.min(statsPeriodIndex,2));
+        boolean useRemote=statsApi!=null&&statsApi.includeServerHistoryInStats;
+        SendStatsStore.Summary summary=SendStatsStore.summarize(
+                this,periods[statsPeriodIndex],
+                useRemote?statsRemoteCache:java.util.Collections.emptyList(),
+                statsApi==null?"":statsApi.id,useRemote&&statsRemoteLoaded);
 
         LinearLayout hero=new LinearLayout(this);hero.setOrientation(LinearLayout.VERTICAL);
-        hero.addView(UiKit.heroTitle(this,prepared>0?prepared+" vorbereitete"+(prepared==1?"r Brief":" Briefe"):(queued>0?queued+" PDF"+(queued==1?" wartet":"s warten"):"Bereit zum Briefversand"),24));
-        String heroText=connected==0?"Noch kein verifiziertes Versandprofil.":connected+" verifizierte"+(connected==1?"s Profil":" Profile")+" · "+prepared+" im Ausgang";
-        hero.addView(UiKit.heroBody(this,heroText));
-        MaterialButton heroAction=UiKit.primary(this,prepared>0?"Ausgang öffnen":(queued>0?"PDF-Eingang öffnen":"PDFs hinzufügen"));
-        heroAction.setBackgroundTintList(ColorStateList.valueOf(0x33FFFFFF));
-        heroAction.setOnClickListener(v->{if(prepared>0)navigateTo(2);else startActivity(new Intent(this,OutboxActivity.class));});
-        LinearLayout.LayoutParams hap=new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,50));hap.setMargins(0,UiKit.dp(this,12),0,0);hero.addView(heroAction,hap);
+        LinearLayout statHead=new LinearLayout(this);statHead.setGravity(Gravity.CENTER_VERTICAL);
+
+        ImageView prev=new ImageView(this);prev.setImageResource(R.drawable.ic_chevron_left);prev.setColorFilter(0xFFFFFFFF);
+        prev.setContentDescription("Vorherige Statistik");prev.setPadding(UiKit.dp(this,8),UiKit.dp(this,8),UiKit.dp(this,8),UiKit.dp(this,8));
+        prev.setOnClickListener(v->{statsPeriodIndex=(statsPeriodIndex+2)%3;render();});
+        statHead.addView(prev,new LinearLayout.LayoutParams(UiKit.dp(this,42),UiKit.dp(this,42)));
+
+        TextView period=UiKit.heroTitle(this,periodNames[statsPeriodIndex],21);period.setGravity(Gravity.CENTER);
+        statHead.addView(period,new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1f));
+
+        ImageView next=new ImageView(this);next.setImageResource(R.drawable.ic_chevron_right);next.setColorFilter(0xFFFFFFFF);
+        next.setContentDescription("Nächste Statistik");next.setPadding(UiKit.dp(this,8),UiKit.dp(this,8),UiKit.dp(this,8),UiKit.dp(this,8));
+        next.setOnClickListener(v->{statsPeriodIndex=(statsPeriodIndex+1)%3;render();});
+        statHead.addView(next,new LinearLayout.LayoutParams(UiKit.dp(this,42),UiKit.dp(this,42)));
+        hero.addView(statHead);
+
+        LinearLayout statRow=new LinearLayout(this);statRow.setGravity(Gravity.CENTER_VERTICAL);
+        TextView count=UiKit.heroTitle(this,String.valueOf(summary.count),28);
+        statRow.addView(count);
+        TextView countLabel=UiKit.heroBody(this,summary.count==1?" Brief":" Briefe");
+        statRow.addView(countLabel);
+        View gap=new View(this);statRow.addView(gap,new LinearLayout.LayoutParams(0,1,1f));
+        String costText=summary.knownCostCount==0?"Kosten: ?":String.format(java.util.Locale.GERMANY,"Kosten: %.2f €",summary.cost);
+        statRow.addView(UiKit.heroBody(this,costText));
+        hero.addView(statRow);
+
+        TextView types=UiKit.heroBody(this,summary.topTypes());types.setTextSize(12);hero.addView(types);
+        if(balanceProfile!=null){
+            TextView bal=UiKit.heroBody(this,balanceCache.isBlank()?"Guthaben wird geladen…":"Guthaben: "+balanceCache.replace(" EUR"," €"));
+            bal.setTextSize(12);bal.setPadding(0,UiKit.dp(this,4),0,0);hero.addView(bal);
+        }
+        if(useRemote&&!statsRemoteLoaded){
+            TextView src=UiKit.heroBody(this,statsRemoteLoading?"LetterXpress-Statistik wird synchronisiert…":"Serverstatistik noch nicht geladen");
+            src.setTextSize(11);hero.addView(src);
+        }
         content.addView(UiKit.hero(this,hero,g[0],g[1]));
 
-        Profile balanceProfile=firstBalanceApi(profiles);
-        LinearLayout metrics=new LinearLayout(this);metrics.setOrientation(LinearLayout.HORIZONTAL);
-        if(balanceProfile!=null){
-            metrics.addView(metricCompact("Guthaben",balanceCache.isBlank()?"…":balanceCache.replace(" EUR"," €")),new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1f));
-            metrics.addView(new View(this),new LinearLayout.LayoutParams(UiKit.dp(this,6),1));
-        }
-        metrics.addView(metricCompact("Verbindungen",String.valueOf(connected)),new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1f));
-        metrics.addView(new View(this),new LinearLayout.LayoutParams(UiKit.dp(this,6),1));
-        metrics.addView(metricCompact("Ausgang",String.valueOf(prepared)),new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1f));
-        metrics.addView(new View(this),new LinearLayout.LayoutParams(UiKit.dp(this,6),1));
-        metrics.addView(metricCompact("Kosten",queueCostCache.isBlank()?"…":queueCostCache),new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1f));
-        content.addView(metrics);
-        if(queueCostCache.isBlank())loadQueueCost();
+        if(useRemote&&!statsRemoteLoaded&&!statsRemoteLoading)loadStatsRemote(statsApi);
+        if(balanceProfile!=null&&balanceCache.isBlank()&&!historyLoading)loadBalanceOnly(balanceProfile);
 
-        Profile api=firstLetterXpressApi(profiles);
         if(api!=null){
             LinearLayout titleRow=new LinearLayout(this);titleRow.setGravity(Gravity.CENTER_VERTICAL);
             TextView title=section("Letzte LetterXpress-Sendungen");
@@ -209,12 +246,10 @@ public class MainActivity extends AppCompatActivity {
             MaterialButton refresh=UiKit.tonal(this,"Aktualisieren");
             refresh.setMinWidth(0);refresh.setPadding(UiKit.dp(this,12),0,UiKit.dp(this,12),0);
             refresh.setOnClickListener(v->{
-                recentCache.clear();
-                recentLoaded=false;
-                if(balanceProfile!=null)balanceCache="";
-                queueCostCache="";
+                recentCache.clear();recentLoaded=false;balanceCache="";
+                statsRemoteCache.clear();statsRemoteLoaded=false;
                 loadRecent(api,true);
-                loadQueueCost();
+                if(statsApi!=null&&statsApi.includeServerHistoryInStats)loadStatsRemote(statsApi);
             });
             titleRow.addView(refresh,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,UiKit.dp(this,44)));
             content.addView(titleRow);
@@ -222,12 +257,35 @@ public class MainActivity extends AppCompatActivity {
             recentContainer=new LinearLayout(this);recentContainer.setOrientation(LinearLayout.VERTICAL);content.addView(recentContainer);
             if(!recentLoaded)loadRecent(api,false);else showRecent(recentCache);
         }
+    }
 
-        boolean hasPost=profiles.stream().anyMatch(p->p.active&&Profile.PROVIDER_POST.equals(p.provider));
-        if(hasPost){
-            TextView note=UiKit.body(this,"Deutsche Post: Das E-POST-Journal ist derzeit nur im Geschäftskundenportal dokumentiert. Es gibt keinen veröffentlichten Journal-Endpunkt für eine sichere gemischte In-App-Historie.");
-            note.setTextSize(12);note.setPadding(0,UiKit.dp(this,12),0,0);content.addView(note);
-        }
+    private Profile firstStatsApi(List<Profile> profiles){
+        for(Profile p:profiles)
+            if(p.active&&p.includeServerHistoryInStats&&Profile.PROVIDER_LETTERXPRESS.equals(p.provider)&&Profile.TYPE_LXP_API.equals(p.type))
+                return p;
+        return null;
+    }
+
+    private void loadStatsRemote(Profile p){
+        if(p==null||statsRemoteLoading)return;
+        statsRemoteLoading=true;
+        new Thread(()->{
+            try{
+                List<RecentLetter> jobs=LetterXpressApiClient.recentJobs(p,1000);
+                runOnUiThread(()->{statsRemoteLoading=false;statsRemoteLoaded=true;statsRemoteCache=jobs;if(currentTab==0)render();});
+            }catch(Exception e){
+                runOnUiThread(()->{statsRemoteLoading=false;statsRemoteLoaded=true;statsRemoteCache.clear();if(currentTab==0)render();});
+            }
+        },"stats-remote").start();
+    }
+
+    private void loadBalanceOnly(Profile p){
+        new Thread(()->{
+            try{
+                String balance=LetterXpressApiClient.balance(p);
+                runOnUiThread(()->{balanceCache=balance;if(currentTab==0)render();});
+            }catch(Exception ignored){}
+        },"balance-only").start();
     }
 
     private Profile firstLetterXpressApi(List<Profile> profiles){
@@ -369,9 +427,9 @@ public class MainActivity extends AppCompatActivity {
         int queued=OutboxStore.load(this).size();
         int[] g=SettingsStore.gradient(this);
         LinearLayout hero=new LinearLayout(this);hero.setOrientation(LinearLayout.VERTICAL);
-        hero.addView(UiKit.heroTitle(this,queued==0?"PDFs für den Versand sammeln":queued+" PDF"+(queued==1?" im PDF-Eingang":"s im PDF-Eingang"),23));
+        hero.addView(UiKit.heroTitle(this,"PDFs vorbereiten",23));
         hero.addView(UiKit.heroBody(this,"Auswählen, zusammenführen, Vorschau prüfen, Versandoptionen festlegen und Profilkosten vergleichen."));
-        MaterialButton open=UiKit.primary(this,queued==0?"PDFs hinzufügen":"PDF-Eingang bearbeiten");
+        MaterialButton open=UiKit.primary(this,"PDF(s) importieren");
         open.setBackgroundTintList(ColorStateList.valueOf(0x33FFFFFF));
         open.setOnClickListener(v->startActivity(new Intent(this,OutboxActivity.class)));
         LinearLayout.LayoutParams op=new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,52));op.setMargins(0,UiKit.dp(this,12),0,0);hero.addView(open,op);
