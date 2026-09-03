@@ -5,15 +5,15 @@ import android.graphics.RectF;
 public final class AddressLayoutRules {
     private AddressLayoutRules(){}
 
-    // LetterXpress official non-registered template:
-    // window begins at x=20 mm, y=45 mm and measures 85 x 45 mm.
-    // We reserve the first 5 mm for the single-line sender and the remaining 40 mm for the recipient.
+    // Conservative cross-provider defaults based on the E-POST MAILER limits:
+    // sender <= 85 x 8 mm, recipient <= 85 x 24 mm.
+    // Both fit comfortably inside a standard window and avoid unnecessary scaling.
     public static RectF normalSender(){
-        return mm(20f,45f,85f,5f);
+        return mm(20f,45f,85f,8f);
     }
 
     public static RectF normalRecipient(){
-        return mm(20f,50f,85f,40f);
+        return mm(20f,53f,85f,24f);
     }
 
     // Deutsche Post describes a typical 90 x 45 mm window and at least 85 x 30 mm
@@ -37,10 +37,11 @@ public final class AddressLayoutRules {
         return mm(22f,66f,83f,22f);
     }
 
-    // Visual safety extension: a full 40 mm normal recipient block moved to the
-    // registered-mail start position would extend 18 mm below the official 22 mm zone.
+    // Visual safety extension: the conservative 24 mm recipient default is 2 mm
+    // taller than the official 22 mm LetterXpress registered-mail recipient zone.
+    // This strip warns that the lowest address content would otherwise be clipped.
     public static RectF lxpRegisteredRecipientSafetyExtension(){
-        return mm(22f,88f,83f,18f);
+        return mm(22f,88f,83f,2f);
     }
 
     public static boolean registered(JobOptions o){
