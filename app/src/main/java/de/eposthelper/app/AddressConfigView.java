@@ -23,13 +23,16 @@ public final class AddressConfigView extends View {
     private final RectF reserved=new RectF();
     private final RectF recipientSafety=new RectF();
     private final RectF windowArea=new RectF();
+    private final RectF windowArea=new RectF();
 
     private RectF active;
     private boolean showReserved=false;
     private boolean showRecipientSafety=false;
     private boolean showWindow=false;
+    private boolean showWindow=false;
     private String reservedLabel="Reservierter Bereich";
     private String recipientSafetyLabel="Adress-Sicherheitsbereich";
+    private String windowLabel="Sichtfenster";
     private String windowLabel="Brieffenster";
     private boolean resizing=false;
     private boolean snapEnabled=true;
@@ -121,6 +124,18 @@ public final class AddressConfigView extends View {
         invalidate();
     }
 
+    public void setWindowArea(RectF area,String label){
+        if(area==null||area.isEmpty()){
+            windowArea.setEmpty();
+            showWindow=false;
+        }else{
+            windowArea.set(area);
+            showWindow=true;
+        }
+        windowLabel=label==null?"Sichtfenster":label;
+        invalidate();
+    }
+
     public void setRecipientSafetyArea(RectF area,String label){
         if(area==null||area.isEmpty()){
             recipientSafety.setEmpty();
@@ -133,8 +148,17 @@ public final class AddressConfigView extends View {
         invalidate();
     }
 
-    public boolean hasCollision(){
+    public boolean hasPostageCollision(){
         return showReserved&&(RectF.intersects(sender,reserved)||RectF.intersects(recipient,reserved));
+    }
+
+    public boolean hasWindowClip(){
+        if(!showWindow)return false;
+        return !contains(windowArea,sender)||!contains(windowArea,recipient);
+    }
+
+    public boolean hasCollision(){
+        return hasPostageCollision()||hasWindowClip();
     }
 
     public void setBoxes(RectF senderBox,RectF recipientBox){
@@ -211,6 +235,21 @@ public final class AddressConfigView extends View {
             paint.setStyle(Paint.Style.FILL);
             paint.setTextSize(UiKit.dp(getContext(),10));
             canvas.drawText(windowLabel,wp.left+UiKit.dp(getContext(),5),wp.top+UiKit.dp(getContext(),13),paint);
+        }
+
+        if(showWindow&&RectF.intersects(viewport,windowArea)){
+            RectF wp=toPixels(windowArea);
+            int wc=hasWindowClip()?0xFFD32F2F:0xFF2E7D78;
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor((wc&0x00FFFFFF)|0x12000000);
+            canvas.drawRect(wp,paint);
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(UiKit.dp(getContext(),2));
+            paint.setColor(wc);
+            canvas.drawRect(wp,paint);
+            paint.setStyle(Paint.Style.FILL);
+            paint.setTextSize(UiKit.dp(getContext(),10));
+            canvas.drawText(windowLabel,wp.left+UiKit.dp(getContext(),5),wp.top+UiKit.dp(getContext(),12),paint);
         }
 
         if(showRecipientSafety&&RectF.intersects(viewport,recipientSafety)){
@@ -364,6 +403,10 @@ public final class AddressConfigView extends View {
 
     private void notifyChange(){
         if(listener!=null)listener.onChanged(new RectF(sender),new RectF(recipient));
+    }
+
+    private static boolean contains(RectF outer,RectF inner){
+        return inner.left>=outer.left&&inner.top>=outer.top&&inner.right<=outer.right&&inner.bottom<=outer.bottom;
     }
 
     private static float distance(float x1,float y1,float x2,float y2){
