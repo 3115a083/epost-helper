@@ -678,7 +678,7 @@ public class OutboxActivity extends AppCompatActivity {
 
         RectF window=DebugProfileManager.isDebug(p)?new RectF():AddressLayoutRules.window(p,o);
         RectF reserved=DebugProfileManager.isDebug(p)?new RectF():AddressLayoutRules.reserved(p,o);
-        RectF safety=DebugProfileManager.isDebug(p)?new RectF():AddressLayoutRules.recipientSafety(p,o);
+        RectF safety=DebugProfileManager.isDebug(p)?new RectF():AddressLayoutRules.recipientOverflow(targetRecipient,AddressLayoutRules.targetRecipient(p,o));
         addressPreview.setWindowArea(window,window.isEmpty()?null:"Sichtfenster");
         addressPreview.setReservedArea(reserved,reserved.isEmpty()?null:"Porto / DVF");
         addressPreview.setRecipientSafetyArea(safety,safety.isEmpty()?null:"Adress-Sicherheitsreserve");
