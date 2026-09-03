@@ -40,6 +40,7 @@ public class MainActivity extends AppCompatActivity {
     private long vibeTapWindowStart=0L;
     private LinearLayout hiddenDebugBox;
     private List<RecentLetter> recentCache=new ArrayList<>();
+    private String balanceCache="";
 
     private final ActivityResultLauncher<Uri> folderPicker=registerForActivityResult(
             new ActivityResultContracts.OpenDocumentTree(),uri->{
@@ -124,8 +125,8 @@ public class MainActivity extends AppCompatActivity {
         scroll.addView(content);page.addView(scroll,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,0,1f));
 
         nav=new LinearLayout(this);nav.setGravity(Gravity.CENTER);nav.setPadding(UiKit.dp(this,8),UiKit.dp(this,5),UiKit.dp(this,8),UiKit.dp(this,8));
-        String[] labels={"Start","Drucken","Profile","Einstellungen"};
-        int[] icons={R.drawable.ic_nav_home,R.drawable.ic_nav_print,R.drawable.ic_nav_profiles,R.drawable.ic_nav_settings};
+        String[] labels={"Start","Drucken","Ausgang","Einstellungen"};
+        int[] icons={R.drawable.ic_nav_home,R.drawable.ic_nav_print,R.drawable.ic_nav_outbox,R.drawable.ic_nav_settings};
         for(int i=0;i<labels.length;i++){
             final int tab=i;
             LinearLayout item=new LinearLayout(this);item.setOrientation(LinearLayout.VERTICAL);item.setGravity(Gravity.CENTER);
@@ -157,7 +158,7 @@ public class MainActivity extends AppCompatActivity {
         content.removeAllViews();styleNav();
         if(currentTab==0)renderHome();
         else if(currentTab==1)renderPrint();
-        else if(currentTab==2)renderProfiles();
+        else if(currentTab==2)renderPreparedQueue();
         else renderSettings();
     }
 
@@ -197,8 +198,16 @@ public class MainActivity extends AppCompatActivity {
             refresh.setOnClickListener(v->{recentCache.clear();loadRecent(api,true);});
             titleRow.addView(refresh,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,UiKit.dp(this,44)));
             content.addView(titleRow);
+
+            LinearLayout balanceCard=new LinearLayout(this);balanceCard.setOrientation(LinearLayout.VERTICAL);
+            balanceCard.addView(UiKit.body(this,"LetterXpress Guthaben"));
+            TextView balanceValue=UiKit.heading(this,balanceCache.isBlank()?"Wird geladen…":balanceCache,22);
+            balanceValue.setTag("balanceValue");
+            balanceCard.addView(balanceValue);
+            content.addView(UiKit.surfaceCard(this,balanceCard));
+
             recentContainer=new LinearLayout(this);recentContainer.setOrientation(LinearLayout.VERTICAL);content.addView(recentContainer);
-            if(recentCache.isEmpty())loadRecent(api,false);else showRecent(recentCache);
+            if(recentCache.isEmpty()||balanceCache.isBlank())loadRecent(api,false);else showRecent(recentCache);
         }
 
         boolean hasPost=profiles.stream().anyMatch(p->p.active&&Profile.PROVIDER_POST.equals(p.provider));
@@ -220,7 +229,11 @@ public class MainActivity extends AppCompatActivity {
         new Thread(()->{
             try{
                 List<RecentLetter> jobs=LetterXpressApiClient.recentJobs(p,5);
-                runOnUiThread(()->{historyLoading=false;recentCache=jobs;if(currentTab==0&&recentContainer!=null)showRecent(jobs);});
+                String balance=LetterXpressApiClient.balance(p);
+                runOnUiThread(()->{
+                    historyLoading=false;recentCache=jobs;balanceCache=balance;
+                    if(currentTab==0){render();}
+                });
             }catch(Exception e){
                 runOnUiThread(()->{historyLoading=false;if(currentTab==0&&recentContainer!=null){recentContainer.removeAllViews();recentContainer.addView(UiKit.body(this,"Sendungshistorie derzeit nicht verfügbar."));}});
             }
@@ -302,8 +315,117 @@ public class MainActivity extends AppCompatActivity {
         content.addView(UiKit.surfaceCard(this,info));
     }
 
-    private void renderProfiles(){
-        content.addView(section("Profile"));
+    private void renderPreparedQueue(){
+        AutoFolderPresets.importPrepared(this);
+        List<PreparedJob> jobs=PreparedJobStore.load(this);
+        int[] g=SettingsStore.gradient(this);
+
+        LinearLayout hero=new LinearLayout(this);hero.setOrientation(LinearLayout.VERTICAL);
+        hero.addView(UiKit.heroTitle(this,jobs.isEmpty()?"Ausgang ist leer":jobs.size()+" vorbereitete"+(jobs.size()==1?"r Brief":" Briefe"),23));
+        hero.addView(UiKit.heroBody(this,"Vorbereitete Briefe bearbeiten, zusammenführen, löschen oder direkt versenden."));
+        MaterialButton add=UiKit.primary(this,"Neuen Brief vorbereiten");
+        add.setBackgroundTintList(ColorStateList.valueOf(0x33FFFFFF));
+        add.setOnClickListener(v->startActivity(new Intent(this,OutboxActivity.class)));
+        LinearLayout.LayoutParams alp=new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,50));alp.setMargins(0,UiKit.dp(this,10),0,0);hero.addView(add,alp);
+        content.addView(UiKit.hero(this,hero,g[0],g[1]));
+
+        if(jobs.isEmpty())return;
+
+        java.util.Map<String,List<PreparedJob>> groups=new java.util.HashMap<>();
+        for(PreparedJob j:jobs){
+            if(j.recipientKey==null||j.recipientKey.isBlank())continue;
+            String key=j.recipientKey+"|"+j.profileId+"|"+j.color+"|"+j.duplex+"|"+j.registered+"|"+j.shipping+"|"+j.addressCorrection;
+            groups.computeIfAbsent(key,k->new ArrayList<>()).add(j);
+        }
+
+        for(PreparedJob j:jobs){
+            LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);
+            LinearLayout head=new LinearLayout(this);head.setGravity(Gravity.CENTER_VERTICAL);
+            Profile p=SecureStore.find(this,j.profileId);
+            int icon=DebugProfileManager.isDebug(p)?R.drawable.ic_provider_debug:
+                    p!=null&&Profile.PROVIDER_LETTERXPRESS.equals(p.provider)?R.drawable.ic_provider_lxp:R.drawable.ic_provider_post;
+            ImageView logo=new ImageView(this);logo.setImageResource(icon);
+            head.addView(logo,new LinearLayout.LayoutParams(UiKit.dp(this,38),UiKit.dp(this,38)));
+            TextView title=UiKit.heading(this,j.name,16);title.setPadding(UiKit.dp(this,10),0,0,0);
+            head.addView(title,new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1f));
+            box.addView(head);
+
+            String opts=(j.color?"Farbe":"SW")+" · "+(j.duplex?"Duplex":"Einseitig")+" · "+j.registered+" · "+("international".equals(j.shipping)?"International":"National")+(j.addressCorrection?" · Korrektur":"");
+            TextView meta=UiKit.body(this,opts);meta.setTextSize(12);meta.setPadding(0,UiKit.dp(this,6),0,UiKit.dp(this,8));box.addView(meta);
+
+            LinearLayout actions=new LinearLayout(this);
+            MaterialButton edit=UiKit.tonal(this,"Bearbeiten");
+            edit.setOnClickListener(v->{Intent i=new Intent(this,OutboxActivity.class);i.putExtra(OutboxActivity.EXTRA_PREPARED_ID,j.id);startActivity(i);});
+            actions.addView(edit,new LinearLayout.LayoutParams(0,UiKit.dp(this,46),1f));
+            actions.addView(new View(this),new LinearLayout.LayoutParams(UiKit.dp(this,8),1));
+            MaterialButton send=UiKit.primary(this,"Senden");send.setOnClickListener(v->sendPrepared(j,send));
+            actions.addView(send,new LinearLayout.LayoutParams(0,UiKit.dp(this,46),1f));
+            box.addView(actions);
+
+            MaterialButton delete=UiKit.tonal(this,"Löschen");delete.setTextColor(0xFFB3261E);
+            delete.setOnClickListener(v->{PreparedJobStore.delete(this,j.id);render();});
+            LinearLayout.LayoutParams dlp=new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,44));dlp.setMargins(0,UiKit.dp(this,7),0,0);box.addView(delete,dlp);
+
+            String key=j.recipientKey+"|"+j.profileId+"|"+j.color+"|"+j.duplex+"|"+j.registered+"|"+j.shipping+"|"+j.addressCorrection;
+            List<PreparedJob> same=groups.get(key);
+            if(same!=null&&same.size()>1&&same.get(0).id.equals(j.id)){
+                MaterialButton merge=UiKit.tonal(this,"Briefe an gleichen Empfänger zusammenführen ("+same.size()+")");
+                merge.setOnClickListener(v->mergePreparedGroup(same,merge));
+                LinearLayout.LayoutParams mlp=new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,48));mlp.setMargins(0,UiKit.dp(this,7),0,0);box.addView(merge,mlp);
+            }
+
+            content.addView(UiKit.surfaceCard(this,box));
+        }
+    }
+
+    private void sendPrepared(PreparedJob job,MaterialButton button){
+        button.setEnabled(false);button.setText("Wird gesendet…");
+        new Thread(()->{
+            try{
+                PreparedJobSender.send(this,job);
+                if(job.deleteSourceAfterSend||!job.sourceUris.isEmpty()){
+                    for(String uri:job.sourceUris)try{
+                        androidx.documentfile.provider.DocumentFile d=androidx.documentfile.provider.DocumentFile.fromSingleUri(this,Uri.parse(uri));
+                        if(d!=null)d.delete();
+                    }catch(Exception ignored){}
+                }
+                PreparedJobStore.delete(this,job.id);
+                runOnUiThread(()->{Snackbar.make(content,"Brief erfolgreich übergeben.",Snackbar.LENGTH_LONG).show();render();});
+            }catch(Exception e){
+                runOnUiThread(()->{button.setEnabled(true);button.setText("Senden");DebugUtil.error(this,button,"Ausgang versenden",e);});
+            }
+        },"prepared-send").start();
+    }
+
+    private void mergePreparedGroup(List<PreparedJob> group,MaterialButton button){
+        if(group==null||group.size()<2)return;
+        button.setEnabled(false);button.setText("Wird zusammengeführt…");
+        new Thread(()->{
+            File merged=null;
+            try{
+                PreparedJob first=group.get(0);
+                merged=PdfMergeUtil.mergePrepared(this,group,first.duplex);
+                PreparedJob combined=new PreparedJob();
+                combined.name=first.name+" + "+(group.size()-1)+" weitere";
+                combined.profileId=first.profileId;combined.color=first.color;combined.duplex=first.duplex;combined.registered=first.registered;
+                combined.c4=first.c4;combined.shipping=first.shipping;combined.addressCorrection=first.addressCorrection;
+                combined.sourceSender=new RectF(first.sourceSender);combined.sourceRecipient=new RectF(first.sourceRecipient);
+                combined.targetSender=new RectF(first.targetSender);combined.targetRecipient=new RectF(first.targetRecipient);
+                combined.recipientKey=first.recipientKey;
+                for(PreparedJob j:group){combined.inputNames.addAll(j.inputNames);combined.sourceUris.addAll(j.sourceUris);}
+                File persisted=PreparedJobStore.persistPdf(this,merged,combined.id);combined.filePath=persisted.getAbsolutePath();
+                PreparedJobStore.upsert(this,combined);
+                for(PreparedJob j:group)PreparedJobStore.delete(this,j.id);
+                File finalMerged=merged;
+                runOnUiThread(()->{if(finalMerged!=null)finalMerged.delete();Snackbar.make(content,"Briefe zusammengeführt.",Snackbar.LENGTH_LONG).show();render();});
+            }catch(Exception e){
+                File finalMerged=merged;
+                runOnUiThread(()->{if(finalMerged!=null)finalMerged.delete();button.setEnabled(true);button.setText("Zusammenführen");DebugUtil.error(this,button,"Briefe zusammenführen",e);});
+            }
+        },"prepared-merge").start();
+    }
+
+    private void renderProfileSettings(){
         for(Profile p:SecureStore.load(this)){
             if(DebugProfileManager.isDebug(p))continue;
             LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);
@@ -338,12 +460,16 @@ public class MainActivity extends AppCompatActivity {
 
     private void handleVibeTap(){
         long now=System.currentTimeMillis();
-        if(now-vibeTapWindowStart>3000){
+        if(now-vibeTapWindowStart>4000){
             vibeTapWindowStart=now;
             vibeTapCount=0;
         }
         vibeTapCount++;
-        if(vibeTapCount<5)return;
+        int remaining=5-vibeTapCount;
+        if(remaining>0){
+            Snackbar.make(content,remaining+" weitere"+(remaining==1?"s Tippen":" Tipps")+" bis zum Debugmodus.",Snackbar.LENGTH_SHORT).show();
+            return;
+        }
 
         vibeTapCount=0;
         vibeTapWindowStart=0L;
@@ -404,7 +530,19 @@ public class MainActivity extends AppCompatActivity {
         TextView folder=UiKit.mono(this,folderUri.isBlank()?"PDF-Ordner auswählen, um Dateien automatisch in den Druckausgang zu übernehmen.":folderDisplayName(folderUri));
         folder.setPadding(0,UiKit.dp(this,6),0,UiKit.dp(this,10));folderBox.addView(folder);
         MaterialButton choose=UiKit.tonal(this,"Ordner auswählen");choose.setOnClickListener(v->folderPicker.launch(null));folderBox.addView(choose);
+        MaterialButton presets=UiKit.tonal(this,"Unterordner für Druckoptionen anlegen");
+        presets.setEnabled(!folderUri.isBlank());
+        presets.setOnClickListener(v->{
+            int created=AutoFolderPresets.createFolders(this);
+            Snackbar.make(content,created>0?created+" Optionsordner angelegt.":"Optionsordner sind bereits vorhanden.",Snackbar.LENGTH_LONG).show();
+        });
+        LinearLayout.LayoutParams plp=new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,48));plp.setMargins(0,UiKit.dp(this,8),0,0);folderBox.addView(presets,plp);
+        TextView presetHelp=UiKit.body(this,"Unterordner wie SW_einseitig_korrektur, Farbe_beidseitig, International oder Einschreiben werden beim Import automatisch als vorbereitete Ausgangsaufträge erkannt. Der debug-Ordner wird nie importiert.");
+        presetHelp.setTextSize(12);presetHelp.setPadding(0,UiKit.dp(this,7),0,0);folderBox.addView(presetHelp);
         content.addView(UiKit.surfaceCard(this,folderBox));
+
+        content.addView(section("Versandprofile"));
+        renderProfileSettings();
 
         content.addView(section("Werkzeuge"));
         content.addView(actionCard(R.drawable.ic_nav_profiles,"Versandfeld-Assistent","Adressbereiche am eigenen PDF-Brieflayout festlegen",()->startActivity(new Intent(this,AddressConfigActivity.class))));
