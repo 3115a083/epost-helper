@@ -38,6 +38,7 @@ public final class AddressConfigView extends View {
     private float downX,downY;
     private float startLeft,startTop,startRight,startBottom;
     private Listener listener;
+    private Runnable interactionFinished;
 
     public interface Listener{
         void onChanged(RectF sender,RectF recipient);
@@ -50,6 +51,7 @@ public final class AddressConfigView extends View {
     }
 
     public void setListener(Listener l){listener=l;}
+    public void setOnInteractionFinished(Runnable r){interactionFinished=r;}
 
     public void setBitmap(Bitmap bitmap){
         if(pageBitmap!=null&&pageBitmap!=bitmap&&!pageBitmap.isRecycled())pageBitmap.recycle();
@@ -334,8 +336,10 @@ public final class AddressConfigView extends View {
 
         if(e.getAction()==MotionEvent.ACTION_UP||e.getAction()==MotionEvent.ACTION_CANCEL){
             getParent().requestDisallowInterceptTouchEvent(false);
+            boolean changed=active!=null;
             active=null;
             resizing=false;
+            if(changed&&interactionFinished!=null)interactionFinished.run();
             return true;
         }
 
