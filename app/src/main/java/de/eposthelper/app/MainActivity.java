@@ -52,9 +52,8 @@ public class MainActivity extends AppCompatActivity {
                             Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
                 }catch(Exception ignored){}
                 SettingsStore.setOutboxFolder(this,uri.toString());
-                int imported=OutboxStore.importFolder(this)+AutoFolderPresets.importPrepared(this);
                 if(currentTab==3)render();
-                Snackbar.make(content,imported>0?imported+" PDF(s) importiert.":"Druckausgangsordner gespeichert.",Snackbar.LENGTH_SHORT).show();
+                Snackbar.make(content,"Ordner gespeichert. Import erfolgt nur noch manuell über den Ausgang.",Snackbar.LENGTH_SHORT).show();
             });
 
     @Override protected void onCreate(Bundle b){
@@ -71,15 +70,11 @@ public class MainActivity extends AppCompatActivity {
         }
         buildShell();
         setupBackNavigation();
-        OutboxStore.importFolder(this);
-        AutoFolderPresets.importPrepared(this);
         render();
     }
 
     @Override protected void onResume(){
         super.onResume();
-        OutboxStore.importFolder(this);
-        AutoFolderPresets.importPrepared(this);
         if(content!=null)render();
     }
 
@@ -321,7 +316,6 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void renderPreparedQueue(){
-        AutoFolderPresets.importPrepared(this);
         List<PreparedJob> jobs=PreparedJobStore.load(this);
         int[] g=SettingsStore.gradient(this);
 
@@ -332,6 +326,14 @@ public class MainActivity extends AppCompatActivity {
         add.setBackgroundTintList(ColorStateList.valueOf(0x33FFFFFF));
         add.setOnClickListener(v->startActivity(new Intent(this,OutboxActivity.class)));
         LinearLayout.LayoutParams alp=new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,50));alp.setMargins(0,UiKit.dp(this,10),0,0);hero.addView(add,alp);
+
+        MaterialButton importNow=UiKit.tonal(this,"Ordner jetzt importieren");
+        importNow.setBackgroundTintList(ColorStateList.valueOf(0x22FFFFFF));
+        importNow.setTextColor(0xFFFFFFFF);
+        importNow.setEnabled(!SettingsStore.outboxFolder(this).isBlank());
+        importNow.setOnClickListener(v->importFolderNow(importNow));
+        LinearLayout.LayoutParams ilp=new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,48));ilp.setMargins(0,UiKit.dp(this,8),0,0);hero.addView(importNow,ilp);
+
         content.addView(UiKit.hero(this,hero,g[0],g[1]));
 
         if(jobs.isEmpty())return;
@@ -459,11 +461,50 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private String folderDisplayName(String uri){
+        if(uri==null||uri.isBlank())return "";
         try{
-            androidx.documentfile.provider.DocumentFile f=androidx.documentfile.provider.DocumentFile.fromTreeUri(this,Uri.parse(uri));
-            if(f!=null&&f.getName()!=null&&!f.getName().isBlank())return f.getName()+"\n"+uri;
+            Uri parsed=Uri.parse(uri);
+            if("com.android.externalstorage.documents".equals(parsed.getAuthority())){
+                String id=android.provider.DocumentsContract.getTreeDocumentId(parsed);
+                if(id!=null){
+                    int colon=id.indexOf(':');
+                    String volume=colon>=0?id.substring(0,colon):id;
+                    String path=colon>=0?id.substring(colon+1):"";
+                    String root="primary".equalsIgnoreCase(volume)?"Interner Speicher":volume;
+                    return path.isBlank()?root:root+"/"+path;
+                }
+            }
+            androidx.documentfile.provider.DocumentFile f=androidx.documentfile.provider.DocumentFile.fromTreeUri(this,parsed);
+            if(f!=null&&f.getName()!=null&&!f.getName().isBlank())return f.getName();
         }catch(Exception ignored){}
-        return uri;
+        return "Ausgewählter Dokumentordner";
+    }
+
+    private void importFolderNow(MaterialButton button){
+        if(SettingsStore.outboxFolder(this).isBlank()){
+            Snackbar.make(content,"Bitte zuerst einen Importordner wählen.",Snackbar.LENGTH_SHORT).show();
+            return;
+        }
+        button.setEnabled(false);
+        button.setText("Import läuft…");
+        new Thread(()->{
+            try{
+                int input=OutboxStore.importFolder(this);
+                int prepared=AutoFolderPresets.importPrepared(this);
+                runOnUiThread(()->{
+                    button.setEnabled(true);
+                    button.setText("Ordner jetzt importieren");
+                    Snackbar.make(content,(input+prepared)>0?(input+prepared)+" PDF(s) importiert.":"Keine neuen PDFs gefunden.",Snackbar.LENGTH_LONG).show();
+                    if(currentTab==2)render();
+                });
+            }catch(Exception e){
+                runOnUiThread(()->{
+                    button.setEnabled(true);
+                    button.setText("Ordner jetzt importieren");
+                    DebugUtil.error(this,button,"Ordnerimport",e);
+                });
+            }
+        },"manual-folder-import").start();
     }
 
     private void handleVibeTap(){
@@ -541,8 +582,24 @@ public class MainActivity extends AppCompatActivity {
         MaterialButton presets=UiKit.tonal(this,"Unterordner für Druckoptionen anlegen");
         presets.setEnabled(!folderUri.isBlank());
         presets.setOnClickListener(v->{
-            int created=AutoFolderPresets.createFolders(this);
-            Snackbar.make(content,created>0?created+" Optionsordner angelegt.":"Optionsordner sind bereits vorhanden.",Snackbar.LENGTH_LONG).show();
+            presets.setEnabled(false);
+            presets.setText("Ordner werden angelegt…");
+            new Thread(()->{
+                try{
+                    int created=AutoFolderPresets.createFolders(this);
+                    runOnUiThread(()->{
+                        presets.setEnabled(true);
+                        presets.setText("Unterordner für Druckoptionen anlegen");
+                        Snackbar.make(content,created>0?created+" Optionsordner angelegt.":"Optionsordner sind bereits vorhanden.",Snackbar.LENGTH_LONG).show();
+                    });
+                }catch(Exception e){
+                    runOnUiThread(()->{
+                        presets.setEnabled(true);
+                        presets.setText("Unterordner für Druckoptionen anlegen");
+                        DebugUtil.error(this,presets,"Optionsordner",e);
+                    });
+                }
+            },"create-option-folders").start();
         });
         LinearLayout.LayoutParams plp=new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,UiKit.dp(this,48));plp.setMargins(0,UiKit.dp(this,8),0,0);folderBox.addView(presets,plp);
         TextView presetHelp=UiKit.body(this,"Unterordner wie SW_einseitig_korrektur, Farbe_beidseitig, International oder Einschreiben werden beim Import automatisch als vorbereitete Ausgangsaufträge erkannt. Der debug-Ordner wird nie importiert.");
