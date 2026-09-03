@@ -250,8 +250,10 @@ public final class LetterXpressApiClient {
                         if(in==null)throw new java.io.IOException("PDF kann nicht geöffnet werden");
                         byte[] buf=new byte[64*1024];int n;
                         while((n=in.read(buf))!=-1)b64.write(buf,0,n);
-                        b64.flush();
                     }
+                    // Base64OutputStream emits the final quartet/padding only when closed.
+                    // NO_CLOSE keeps OkHttp's underlying sink open so the JSON suffix can follow.
+                    b64.close();
                     String suffix="\",\"base64_file_checksum\":\""+checksum+"\",\"filename_original\":"+JSONObject.quote(filename)+
                             ",\"specification\":"+spec.toString()+
                             (reg.isBlank()?"":",\"registered\":"+JSONObject.quote(reg))+
