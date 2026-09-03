@@ -98,11 +98,21 @@ public final class SettingsStore {
 
     public static void importJson(Context c,JSONObject o){
         if(o==null)return;
+        String restoredFolder=o.optString("outboxFolder","");
+        if(!restoredFolder.isBlank()){
+            boolean permitted=false;
+            try{
+                for(android.content.UriPermission p:c.getContentResolver().getPersistedUriPermissions()){
+                    if(p.isReadPermission()&&p.getUri().toString().equals(restoredFolder)){permitted=true;break;}
+                }
+            }catch(Exception ignored){}
+            if(!permitted)restoredFolder="";
+        }
         c.getSharedPreferences(PREF,Context.MODE_PRIVATE).edit()
                 .putString(MODE,o.optString("appearance","system"))
                 .putString(PALETTE,o.optString("palette","material_you"))
                 .putBoolean(DEBUG,o.optBoolean("debug",false))
-                .putString(OUTBOX_FOLDER,o.optString("outboxFolder",""))
+                .putString(OUTBOX_FOLDER,restoredFolder)
                 .apply();
         applySavedAppearance(c);
     }
