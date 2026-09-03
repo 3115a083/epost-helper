@@ -93,6 +93,7 @@ public class MainActivity extends AppCompatActivity {
         if(tab==currentTab)return;
         tabHistory.push(currentTab);
         currentTab=tab;
+        if(tab==0)queueCostCache="";
         render();
     }
 
