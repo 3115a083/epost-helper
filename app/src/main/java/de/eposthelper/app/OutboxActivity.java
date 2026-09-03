@@ -470,8 +470,28 @@ public class OutboxActivity extends AppCompatActivity {
             registered.setSelection(regIndex);
             shipping.setSelection("international".equals(editingPrepared.shipping)?1:0);
             c4.setChecked(editingPrepared.c4);
+        }else if(!working.isEmpty()&&working.get(0).hasPreset){
+            JobOptions preset=working.get(0).presetOptions();
+            color.setChecked(preset.color);
+            duplex.setChecked(preset.duplex);
+            int regIndex=0;for(int i=0;i<registered.getCount();i++)if(String.valueOf(registered.getItemAtPosition(i)).equals(preset.registered))regIndex=i;
+            registered.setSelection(regIndex);
+            shipping.setSelection("international".equals(preset.shipping)?1:0);
+            c4.setChecked(preset.c4);
         }
         root.addView(UiKit.surfaceCard(this,print));
+
+        if(editingPrepared==null&&working.size()>1){
+            LinearLayout mergeBox=new LinearLayout(this);mergeBox.setOrientation(LinearLayout.VERTICAL);
+            mergeBox.addView(UiKit.heading(this,"Mehrere PDFs",17));
+            mergeLetters=new MaterialSwitch(this);
+            mergeLetters.setText("Als einen Brief an denselben Empfänger zusammenführen");
+            mergeLetters.setChecked(true);
+            mergeBox.addView(mergeLetters);
+            TextView mergeHelp=UiKit.body(this,"Aus: Jede PDF bleibt ein eigener Brief. An: Die PDFs werden in der gewählten Reihenfolge zu einem Brief verbunden. Bei Duplex fügt die App nach einem Dokument mit ungerader Seitenzahl automatisch eine Leerseite ein, damit das nächste Dokument auf einem neuen Blatt beginnt.");
+            mergeHelp.setTextSize(12);mergeHelp.setPadding(0,UiKit.dp(this,4),0,0);mergeBox.addView(mergeHelp);
+            root.addView(UiKit.surfaceCard(this,mergeBox));
+        }
 
         LinearLayout addressBox=new LinearLayout(this);addressBox.setOrientation(LinearLayout.VERTICAL);
         addressBox.addView(UiKit.heading(this,"Adresslayout",17));
@@ -518,6 +538,7 @@ public class OutboxActivity extends AppCompatActivity {
 
         refreshProfiles();
         if(editingPrepared!=null&&editingPrepared.addressCorrection)localCorrection.setChecked(true);
+        else if(editingPrepared==null&&!working.isEmpty()&&working.get(0).hasPreset&&working.get(0).presetCorrection)localCorrection.setChecked(true);
 
         MaterialButton saveOutbox=UiKit.tonal(this,editingPrepared==null?"In Ausgang legen":"Änderungen im Ausgang speichern");
         saveOutbox.setOnClickListener(v->savePrepared(saveOutbox));
