@@ -43,6 +43,10 @@ public class MainActivity extends AppCompatActivity {
     private LinearLayout hiddenDebugBox;
     private List<RecentLetter> recentCache=new ArrayList<>();
     private String balanceCache="";
+    private boolean recentLoaded=false;
+    private String outboxCostCache="";
+    private String outboxCostSignature="";
+    private boolean outboxCostLoading=false;
     private String queueCostCache="";
     private boolean queueCostLoading=false;
 
@@ -291,7 +295,7 @@ public class MainActivity extends AppCompatActivity {
                     if(currentTab==0){render();}
                 });
             }catch(Exception e){
-                runOnUiThread(()->{historyLoading=false;if(currentTab==0&&recentContainer!=null){recentContainer.removeAllViews();recentContainer.addView(UiKit.body(this,"Sendungshistorie derzeit nicht verfügbar."));}});
+                runOnUiThread(()->{historyLoading=false;recentLoaded=true;if(currentTab==0&&recentContainer!=null){recentContainer.removeAllViews();recentContainer.addView(UiKit.body(this,"Sendungshistorie derzeit nicht verfügbar."));}});
             }
         },"lxp-history").start();
     }
@@ -330,6 +334,47 @@ public class MainActivity extends AppCompatActivity {
             case "draft":return "Postbox";
             default:return status;
         }
+    }
+
+    private void updateOutboxCostAsync(List<PreparedJob> jobs){
+        StringBuilder sig=new StringBuilder();
+        for(PreparedJob j:jobs){
+            File f=new File(j.filePath);
+            sig.append(j.id).append('|').append(j.profileId).append('|').append(j.color).append('|')
+                    .append(j.duplex).append('|').append(j.registered).append('|').append(j.c4).append('|')
+                    .append(j.shipping).append('|').append(f.exists()?f.length():0).append(';');
+        }
+        String signature=sig.toString();
+        if(signature.equals(outboxCostSignature)||outboxCostLoading)return;
+        outboxCostLoading=true;
+        new Thread(()->{
+            double total=0;
+            int unknown=0;
+            for(PreparedJob j:jobs){
+                try{
+                    Profile p=SecureStore.find(this,j.profileId);
+                    if(p==null||DebugProfileManager.isDebug(p)){unknown++;continue;}
+                    if(Profile.PROVIDER_LETTERXPRESS.equals(p.provider)){
+                        int pages=PdfMergeUtil.countPages(new File(j.filePath));
+                        double price=LetterXpressPriceEstimator.gross(j.options(),pages);
+                        if(price>=0)total+=price;else unknown++;
+                    }else{
+                        unknown++;
+                    }
+                }catch(Exception e){unknown++;}
+            }
+            final String value;
+            if(jobs.isEmpty())value="0,00 €";
+            else if(total>0)value=String.format(java.util.Locale.GERMANY,"ca. %.2f €",total);
+            else value="k. A.";
+            final int unknownCount=unknown;
+            runOnUiThread(()->{
+                outboxCostLoading=false;
+                outboxCostSignature=signature;
+                outboxCostCache=value+(unknownCount>0&&total>0?" +":"");
+                if(currentTab==0)render();
+            });
+        },"outbox-cost").start();
     }
 
     private MaterialCardView metric(String label,String value,String sub){
