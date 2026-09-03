@@ -74,6 +74,7 @@ public final class AutoFolderPresets {
                     File persisted=PreparedJobStore.persistPdf(c,tmp,job.id);tmp.delete();
                     job.filePath=persisted.getAbsolutePath();
                     job.sourceUri=f.getUri().toString();
+                    job.sourceUris.add(job.sourceUri);
                     job.deleteSourceAfterSend=true;
                     job.inputNames.add(fn);
                     PreparedJobStore.upsert(c,job);
