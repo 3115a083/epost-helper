@@ -318,6 +318,7 @@ public class ProfileEditActivity extends AppCompatActivity {
         }
         if(!found)list.add(profile);
         SecureStore.save(this,list);
+        DeviceTransferStore.refresh(this);
     }
 
     private void saveQuiet(){
