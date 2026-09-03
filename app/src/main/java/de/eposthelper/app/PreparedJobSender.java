@@ -15,7 +15,7 @@ public final class PreparedJobSender {
         try{
             File outgoing=source;
             if(job.addressCorrection){
-                corrected=AddressCorrectionProcessor.apply(c,source,p,job.sourceSender,job.sourceRecipient,job.targetSender,job.targetRecipient);
+                corrected=AddressCorrectionProcessor.apply(c,source,job.sourceSender,job.sourceRecipient,job.targetSender,job.targetRecipient);
                 outgoing=corrected;
             }
             if(DebugProfileManager.isDebug(p)){
