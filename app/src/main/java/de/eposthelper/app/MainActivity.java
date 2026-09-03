@@ -67,6 +67,7 @@ public class MainActivity extends AppCompatActivity {
         SettingsStore.applySavedAppearance(this);
         super.onCreate(b);
         SettingsStore.applyDynamicColors(this);
+        DeviceTransferStore.restoreIfNeeded(this);
         DebugProfileManager.ensure(this);
         if(b!=null)currentTab=b.getInt("currentTab",0);
         Uri incoming=getIntent().getData();
@@ -84,6 +85,11 @@ public class MainActivity extends AppCompatActivity {
         super.onResume();
         queueCostCache="";
         if(content!=null)render();
+    }
+
+    @Override protected void onPause(){
+        DeviceTransferStore.refresh(this);
+        super.onPause();
     }
 
     @Override protected void onSaveInstanceState(Bundle out){
@@ -650,6 +656,35 @@ public class MainActivity extends AppCompatActivity {
         },"manual-folder-import").start();
     }
 
+    private void checkUpdates(TextView anchor){
+        anchor.setText("Updateprüfung läuft…");
+        new Thread(()->{
+            try{
+                UpdateChecker.Result result=UpdateChecker.check();
+                runOnUiThread(()->{
+                    anchor.setText("Build "+BuildConfig.VERSION_NAME+" · "+BuildConfig.VERSION_CODE+" · Auf Updates prüfen");
+                    if(result.updateAvailable){
+                        new com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
+                                .setTitle("Update verfügbar")
+                                .setMessage(result.message)
+                                .setNegativeButton("Später",null)
+                                .setPositiveButton("GitHub öffnen",(d,w)->{
+                                    if(result.url!=null&&!result.url.isBlank())
+                                        startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse(result.url)));
+                                }).show();
+                    }else{
+                        Snackbar.make(content,result.message,Snackbar.LENGTH_LONG).show();
+                    }
+                });
+            }catch(Exception e){
+                runOnUiThread(()->{
+                    anchor.setText("Build "+BuildConfig.VERSION_NAME+" · "+BuildConfig.VERSION_CODE+" · Auf Updates prüfen");
+                    DebugUtil.error(this,anchor,"Updateprüfung",e);
+                });
+            }
+        },"update-check").start();
+    }
+
     private void handleVibeTap(){
         long now=System.currentTimeMillis();
         if(now-vibeTapWindowStart>4000){
@@ -749,6 +784,12 @@ public class MainActivity extends AppCompatActivity {
         presetHelp.setTextSize(12);presetHelp.setPadding(0,UiKit.dp(this,7),0,0);folderBox.addView(presetHelp);
         content.addView(UiKit.surfaceCard(this,folderBox));
 
+        content.addView(section("Backup & Gerätewechsel"));
+        content.addView(actionCard(R.drawable.ic_nav_settings,
+                "Einstellungen & Statistiken sichern",
+                "Passwortgeschützter Export/Import und portable Geräteübertragung ohne API-Keys",
+                ()->startActivity(new Intent(this,BackupActivity.class))));
+
         content.addView(section("Versandprofile"));
         renderProfileSettings();
 
@@ -796,6 +837,14 @@ public class MainActivity extends AppCompatActivity {
         github.setPadding(0,UiKit.dp(this,5),0,UiKit.dp(this,28));
         github.setOnClickListener(v->startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse("https://github.com/3115a083/epost-helper"))));
         content.addView(github);
+
+        TextView build=UiKit.body(this,"Build "+BuildConfig.VERSION_NAME+" · "+BuildConfig.VERSION_CODE+" · Auf Updates prüfen");
+        build.setGravity(Gravity.CENTER);
+        build.setTextSize(11);
+        build.setTextColor(SettingsStore.primary(this));
+        build.setPadding(0,0,0,UiKit.dp(this,18));
+        build.setOnClickListener(v->checkUpdates(build));
+        content.addView(build);
     }
 
 }
