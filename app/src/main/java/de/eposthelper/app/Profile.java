@@ -35,6 +35,7 @@ public final class Profile {
     public boolean connectionVerified=false;
     public long connectionVerifiedAt=0L;
     public String lastConnectionMessage="";
+    public boolean showBalanceOnHome=true;
 
     public JSONObject toJson() throws JSONException{
         JSONObject o=new JSONObject();
@@ -43,7 +44,7 @@ public final class Profile {
         o.put("certificatePin",certificatePin);o.put("sshHostKey",sshHostKey);
         o.put("active",active);o.put("duplex",duplex);o.put("color",color);o.put("registeredMail",registeredMail);
         o.put("addressCorrection",addressCorrection);o.put("recipientWindow",recipientWindow);o.put("senderWindow",senderWindow);
-        o.put("connectionVerified",connectionVerified);o.put("connectionVerifiedAt",connectionVerifiedAt);o.put("lastConnectionMessage",lastConnectionMessage);
+        o.put("connectionVerified",connectionVerified);o.put("connectionVerifiedAt",connectionVerifiedAt);o.put("lastConnectionMessage",lastConnectionMessage);o.put("showBalanceOnHome",showBalanceOnHome);
         return o;
     }
 
@@ -71,6 +72,7 @@ public final class Profile {
         p.connectionVerified=o.optBoolean("connectionVerified",false);
         p.connectionVerifiedAt=o.optLong("connectionVerifiedAt",0L);
         p.lastConnectionMessage=o.optString("lastConnectionMessage","");
+        p.showBalanceOnHome=o.optBoolean("showBalanceOnHome",true);
         return p;
     }
 }
