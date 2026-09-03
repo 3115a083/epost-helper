@@ -362,7 +362,10 @@ public class MainActivity extends AppCompatActivity {
             edit.setOnClickListener(v->{Intent i=new Intent(this,OutboxActivity.class);i.putExtra(OutboxActivity.EXTRA_PREPARED_ID,j.id);startActivity(i);});
             actions.addView(edit,new LinearLayout.LayoutParams(0,UiKit.dp(this,46),1f));
             actions.addView(new View(this),new LinearLayout.LayoutParams(UiKit.dp(this,8),1));
-            MaterialButton send=UiKit.primary(this,"Senden");send.setOnClickListener(v->sendPrepared(j,send));
+            boolean ready=p!=null&&ProfileCompatibility.compatible(p,j.options());
+            MaterialButton send=UiKit.primary(this,ready?"Senden":"Profil wählen");
+            if(ready)send.setOnClickListener(v->sendPrepared(j,send));
+            else send.setOnClickListener(v->{Intent i=new Intent(this,OutboxActivity.class);i.putExtra(OutboxActivity.EXTRA_PREPARED_ID,j.id);startActivity(i);});
             actions.addView(send,new LinearLayout.LayoutParams(0,UiKit.dp(this,46),1f));
             box.addView(actions);
 
