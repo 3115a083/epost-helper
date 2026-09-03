@@ -200,7 +200,7 @@ public class MainActivity extends AppCompatActivity {
             titleRow.addView(title,new LinearLayout.LayoutParams(0,ViewGroup.LayoutParams.WRAP_CONTENT,1f));
             MaterialButton refresh=UiKit.tonal(this,"Aktualisieren");
             refresh.setMinWidth(0);refresh.setPadding(UiKit.dp(this,12),0,UiKit.dp(this,12),0);
-            refresh.setOnClickListener(v->{recentCache.clear();loadRecent(api,true);});
+            refresh.setOnClickListener(v->{recentCache.clear();balanceCache="";loadRecent(api,true);});
             titleRow.addView(refresh,new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,UiKit.dp(this,44)));
             content.addView(titleRow);
 
@@ -212,7 +212,7 @@ public class MainActivity extends AppCompatActivity {
             content.addView(UiKit.surfaceCard(this,balanceCard));
 
             recentContainer=new LinearLayout(this);recentContainer.setOrientation(LinearLayout.VERTICAL);content.addView(recentContainer);
-            if(recentCache.isEmpty()||balanceCache.isBlank())loadRecent(api,false);else showRecent(recentCache);
+            if(balanceCache.isBlank())loadRecent(api,false);else showRecent(recentCache);
         }
 
         boolean hasPost=profiles.stream().anyMatch(p->p.active&&Profile.PROVIDER_POST.equals(p.provider));
