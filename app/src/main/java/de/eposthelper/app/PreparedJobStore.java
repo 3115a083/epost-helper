@@ -65,6 +65,15 @@ public final class PreparedJobStore {
         return dest;
     }
 
+    public static boolean hasSourceUri(Context c,String uri){
+        if(uri==null||uri.isBlank())return false;
+        for(PreparedJob j:load(c)){
+            if(uri.equals(j.sourceUri))return true;
+            for(String u:j.sourceUris)if(uri.equals(u))return true;
+        }
+        return false;
+    }
+
     public static void delete(Context c,String id){
         List<PreparedJob> jobs=load(c);
         jobs.removeIf(j->{if(id.equals(j.id)){try{new File(j.filePath).delete();}catch(Exception ignored){}return true;}return false;});
