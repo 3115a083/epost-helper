@@ -737,6 +737,11 @@ public class OutboxActivity extends AppCompatActivity {
                 targetSender=AddressLayoutRules.moveLike(sourceSender,AddressLayoutRules.targetSender(p,o));
                 targetRecipient=AddressLayoutRules.moveLike(sourceRecipient,AddressLayoutRules.targetRecipient(p,o));
             }
+            RectF postage=DebugProfileManager.isDebug(p)?new RectF():AddressLayoutRules.postage(p,o);
+            if(!postage.isEmpty()){
+                targetSender=AddressLayoutRules.lockAbovePostage(targetSender,postage);
+                targetRecipient=AddressLayoutRules.lockBelowPostage(targetRecipient,postage);
+            }
             if(previewBitmap!=null&&!previewBitmap.isRecycled()){
                 try{
                     addressPreview.setBitmap(AddressPreviewComposer.compose(previewBitmap,sourceSender,sourceRecipient,targetSender,targetRecipient));

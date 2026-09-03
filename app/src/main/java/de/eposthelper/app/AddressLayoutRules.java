@@ -62,6 +62,18 @@ public final class AddressLayoutRules {
         return new RectF(anchor.left,anchor.top,anchor.left+w,anchor.top+h);
     }
 
+    public static RectF lockAbovePostage(RectF box,RectF postage){
+        if(box==null||box.isEmpty()||postage==null||postage.isEmpty())return box==null?new RectF():new RectF(box);
+        float h=box.height();
+        return new RectF(box.left,postage.top-h,box.right,postage.top);
+    }
+
+    public static RectF lockBelowPostage(RectF box,RectF postage){
+        if(box==null||box.isEmpty()||postage==null||postage.isEmpty())return box==null?new RectF():new RectF(box);
+        float h=box.height();
+        return new RectF(box.left,postage.bottom,box.right,postage.bottom+h);
+    }
+
     // Portion that would lie below the provider's intended recipient zone when moved
     // without scaling. This is only a warning overlay; it does not alter the PDF.
     public static RectF recipientOverflow(RectF movedRecipient,RectF allowedRecipient){
