@@ -54,7 +54,7 @@ public class OutboxActivity extends AppCompatActivity {
     private Bitmap orderPreviewBitmap;
 
     private String selectedProfileId;
-    private MaterialSwitch color,duplex,localCorrection,c4,mergeLetters;
+    private MaterialSwitch color,duplex,localCorrection,c4,mergeLetters,keepSheetBoundaries;
     private Spinner registered,shipping;
     private PreparedJob editingPrepared;
     private AddressConfigView addressPreview;
@@ -128,8 +128,6 @@ public class OutboxActivity extends AppCompatActivity {
 
     @Override protected void onResume(){
         super.onResume();
-        OutboxStore.importFolder(this);
-        AutoFolderPresets.importPrepared(this);
         if(editingPrepared==null)refreshItems();
     }
 
@@ -488,8 +486,21 @@ public class OutboxActivity extends AppCompatActivity {
             mergeLetters.setText("Als einen Brief an denselben Empfänger zusammenführen");
             mergeLetters.setChecked(true);
             mergeBox.addView(mergeLetters);
-            TextView mergeHelp=UiKit.body(this,"Aus: Jede PDF bleibt ein eigener Brief. An: Die PDFs werden in der gewählten Reihenfolge zu einem Brief verbunden. Bei Duplex fügt die App nach einem Dokument mit ungerader Seitenzahl automatisch eine Leerseite ein, damit das nächste Dokument auf einem neuen Blatt beginnt.");
+
+            keepSheetBoundaries=new MaterialSwitch(this);
+            keepSheetBoundaries.setText("Quelldokumente auf getrennten Blättern halten");
+            keepSheetBoundaries.setChecked(true);
+            keepSheetBoundaries.setEnabled(duplex.isChecked());
+            mergeBox.addView(keepSheetBoundaries);
+
+            TextView mergeHelp=UiKit.body(this,"Wenn „getrennte Blätter“ aktiv ist, fügt die App bei Duplex nur dann eine Leerseite zwischen zwei PDFs ein, wenn das vorherige Dokument eine ungerade Seitenzahl hat. Ist die Option aus, folgen die Seiten ohne zusätzliche Leerseite direkt aufeinander.");
             mergeHelp.setTextSize(12);mergeHelp.setPadding(0,UiKit.dp(this,4),0,0);mergeBox.addView(mergeHelp);
+
+            mergeLetters.setOnCheckedChangeListener((button,checked)->{
+                keepSheetBoundaries.setVisibility(checked?View.VISIBLE:View.GONE);
+                mergeHelp.setVisibility(checked?View.VISIBLE:View.GONE);
+            });
+            duplex.setOnCheckedChangeListener((button,checked)->keepSheetBoundaries.setEnabled(checked));
             root.addView(UiKit.surfaceCard(this,mergeBox));
         }
 
@@ -748,6 +759,10 @@ public class OutboxActivity extends AppCompatActivity {
         return editingPrepared!=null||working.size()<=1||mergeLetters==null||mergeLetters.isChecked();
     }
 
+    private boolean preserveSheetBoundaries(){
+        return mergeAsOne()&&duplex!=null&&duplex.isChecked()&&keepSheetBoundaries!=null&&keepSheetBoundaries.isChecked();
+    }
+
     private void fillPreparedJob(PreparedJob j,Profile p,JobOptions o){
         j.profileId=p.id;
         j.color=o.color;
@@ -815,7 +830,7 @@ public class OutboxActivity extends AppCompatActivity {
                 }
 
                 File sourceForQueue=merged;
-                if(working.size()>1&&o.duplex){
+                if(working.size()>1&&preserveSheetBoundaries()){
                     separated=PdfMergeUtil.merge(this,working,true);
                     sourceForQueue=separated;
                 }
@@ -942,7 +957,7 @@ public class OutboxActivity extends AppCompatActivity {
                     }
                 }else{
                     File source=merged;
-                    if(sentItems.size()>1&&o.duplex){
+                    if(sentItems.size()>1&&preserveSheetBoundaries()){
                         separated=PdfMergeUtil.merge(this,sentItems,true);
                         source=separated;
                     }
