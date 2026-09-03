@@ -198,13 +198,16 @@ public class AddressEditActivity extends AppCompatActivity {
         if(sourceMode){
             preview.setBoxes(sourceSender,sourceRecipient);
             preview.setReservedArea(null,null);
+            preview.setWindowArea(null,null);
             preview.setRecipientSafetyArea(null,null);
             if(snap.isChecked())snap.setChecked(false);
         }else{
             preview.setBoxes(targetSender,targetRecipient);
+            RectF window=profile==null?new RectF():AddressLayoutRules.window(profile,options);
             RectF reserved=profile==null?new RectF():AddressLayoutRules.reserved(profile,options);
             RectF safety=profile==null?new RectF():AddressLayoutRules.recipientSafety(profile,options);
-            preview.setReservedArea(reserved,reserved.isEmpty()?null:"Reserviert für Einschreiben");
+            preview.setWindowArea(window,window.isEmpty()?null:"Sichtfenster");
+            preview.setReservedArea(reserved,reserved.isEmpty()?null:"Porto / DVF");
             preview.setRecipientSafetyArea(safety,safety.isEmpty()?null:"Sicherheitsreserve bei voller Adresse");
         }
         updateHint();
