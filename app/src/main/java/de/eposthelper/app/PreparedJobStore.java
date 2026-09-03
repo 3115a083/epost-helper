@@ -75,7 +75,7 @@ public final class PreparedJobStore {
                 try{
                     File restored=persistPdf(c,merged,job.id);
                     job.filePath=restored.getAbsolutePath();
-                    upsert(c,job);
+                    updateIfPresent(c,job);
                     return restored;
                 }finally{merged.delete();}
             }
@@ -87,7 +87,7 @@ public final class PreparedJobStore {
         if(candidates.size()==1){
             File restored=persistUri(c,android.net.Uri.parse(candidates.get(0)),job.id);
             job.filePath=restored.getAbsolutePath();
-            upsert(c,job);
+            updateIfPresent(c,job);
             return restored;
         }
         if(candidates.size()>1){
@@ -102,11 +102,22 @@ public final class PreparedJobStore {
             try{
                 File restored=persistPdf(c,merged,job.id);
                 job.filePath=restored.getAbsolutePath();
-                upsert(c,job);
+                updateIfPresent(c,job);
                 return restored;
             }finally{merged.delete();}
         }
         throw new IllegalStateException("Vorbereitete PDF fehlt und die Quelldatei ist nicht mehr verfügbar.");
+    }
+
+    private static void updateIfPresent(Context c,PreparedJob job){
+        List<PreparedJob> jobs=load(c);
+        for(int i=0;i<jobs.size();i++){
+            if(jobs.get(i).id.equals(job.id)){
+                jobs.set(i,job);
+                save(c,jobs);
+                return;
+            }
+        }
     }
 
     public static boolean hasSourceUri(Context c,String uri){
