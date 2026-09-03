@@ -104,6 +104,13 @@ public class ProfileEditActivity extends AppCompatActivity {
         sshKey=field("SFTP Host-Key-Fingerprint",profile.sshHostKey,false);addField(credentials,sshKey);
         root.addView(UiKit.surfaceCard(this,credentials));
 
+        LinearLayout account=cardBody("LetterXpress Anzeige","Optionale Kontoinformationen für die Startseite.");
+        showBalance=new MaterialSwitch(this);
+        showBalance.setText("Guthaben auf der Startseite anzeigen");
+        showBalance.setChecked(profile.showBalance);
+        account.addView(showBalance);
+        root.addView(UiKit.surfaceCard(this,account));
+
         LinearLayout defaults=cardBody("Standard-Versand","Diese Werte sind Startwerte. Im Android-Druckdialog kannst du sie pro Brief überschreiben.");
         duplex=new MaterialSwitch(this);duplex.setText("Doppelseitig");duplex.setChecked(profile.duplex);defaults.addView(duplex);
         color=new MaterialSwitch(this);color.setText("Farbe");color.setChecked(profile.color);defaults.addView(color);
@@ -169,6 +176,8 @@ public class ProfileEditActivity extends AppCompatActivity {
         secret.setHint(api?"LetterXpress API-Key":sftp?"SFTP Passwort":"WebDAV Passwort");
         secret.setVisibility(ipp?View.GONE:View.VISIBLE);
         remoteAddressCorrection.setVisibility(lxp?View.GONE:View.VISIBLE);
+        if(showBalance!=null)showBalance.getParent().requestLayout();
+        if(showBalance!=null)((View)showBalance.getParent()).setVisibility(api?View.VISIBLE:View.GONE);
         showBalance.setVisibility(api?View.VISIBLE:View.GONE);
         pin.setVisibility(sftp?View.GONE:View.VISIBLE);
         sshKey.setVisibility(sftp?View.VISIBLE:View.GONE);
@@ -193,6 +202,7 @@ public class ProfileEditActivity extends AppCompatActivity {
         profile.certificatePin=text(pin);profile.sshHostKey=text(sshKey);
         profile.duplex=duplex.isChecked();profile.color=color.isChecked();profile.registeredMail=String.valueOf(registered.getSelectedItem());
         profile.addressCorrection=!lxp&&remoteAddressCorrection!=null&&remoteAddressCorrection.isChecked();
+        profile.showBalance=lxp&&Profile.TYPE_LXP_API.equals(profile.type)&&showBalance!=null&&showBalance.isChecked();
         profile.showBalanceOnHome=lxp&&Profile.TYPE_LXP_API.equals(profile.type)&&showBalance!=null&&showBalance.isChecked();
         profile.showBalanceOnHome=showBalance==null||showBalance.isChecked();
     }
