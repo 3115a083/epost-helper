@@ -69,6 +69,7 @@ public class MainActivity extends AppCompatActivity {
         SettingsStore.applyDynamicColors(this);
         DeviceTransferStore.restoreIfNeeded(this);
         DebugProfileManager.ensure(this);
+        OutboxStore.reconcilePrepared(this);
         if(b!=null)currentTab=b.getInt("currentTab",0);
         Uri incoming=getIntent().getData();
         if(Intent.ACTION_VIEW.equals(getIntent().getAction())&&incoming!=null){
