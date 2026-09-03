@@ -60,8 +60,10 @@ public class AddressEditActivity extends AppCompatActivity {
         if(sourceSender.isEmpty())sourceSender=AddressLayoutRules.normalSender();
         if(sourceRecipient.isEmpty())sourceRecipient=AddressLayoutRules.normalRecipient();
 
-        targetSender=rectExtra(EXTRA_TARGET_SENDER,profile==null?AddressLayoutRules.normalSender():AddressLayoutRules.targetSender(profile,options));
-        targetRecipient=rectExtra(EXTRA_TARGET_RECIPIENT,profile==null?AddressLayoutRules.normalRecipient():AddressLayoutRules.targetRecipient(profile,options));
+        RectF senderAnchor=profile==null?AddressLayoutRules.normalSender():AddressLayoutRules.targetSender(profile,options);
+        RectF recipientAnchor=profile==null?AddressLayoutRules.normalRecipient():AddressLayoutRules.targetRecipient(profile,options);
+        targetSender=rectExtra(EXTRA_TARGET_SENDER,AddressLayoutRules.moveLike(sourceSender,senderAnchor));
+        targetRecipient=rectExtra(EXTRA_TARGET_RECIPIENT,AddressLayoutRules.moveLike(sourceRecipient,recipientAnchor));
 
         render();
         loadPdf();
@@ -204,11 +206,12 @@ public class AddressEditActivity extends AppCompatActivity {
         }else{
             preview.setBoxes(targetSender,targetRecipient);
             RectF window=profile==null?new RectF():AddressLayoutRules.window(profile,options);
-            RectF reserved=profile==null?new RectF():AddressLayoutRules.reserved(profile,options);
-            RectF safety=profile==null?new RectF():AddressLayoutRules.recipientSafety(profile,options);
-            preview.setWindowArea(window,window.isEmpty()?null:"Sichtfenster");
-            preview.setReservedArea(reserved,reserved.isEmpty()?null:"Porto / DVF");
-            preview.setRecipientSafetyArea(safety,safety.isEmpty()?null:"Sicherheitsreserve bei voller Adresse");
+            RectF postage=profile==null?new RectF():AddressLayoutRules.postage(profile,options);
+            RectF allowedRecipient=profile==null?new RectF():AddressLayoutRules.targetRecipient(profile,options);
+            RectF overflow=AddressLayoutRules.recipientOverflow(targetRecipient,allowedRecipient);
+            preview.setWindowArea(window,window.isEmpty()?null:"Brief-Sichtfenster");
+            preview.setReservedArea(postage,postage.isEmpty()?null:"Porto / DV-Freimachung");
+            preview.setRecipientSafetyArea(overflow,overflow.isEmpty()?null:"Adressanteil außerhalb Sollfeld");
         }
         updateHint();
     }
@@ -216,13 +219,16 @@ public class AddressEditActivity extends AppCompatActivity {
     private void updateHint(){
         if(sourceMode){
             hint.setText("Ziehe die beiden Rahmen auf Absender und Empfänger im vorhandenen Brief. Ohne Einrasten kannst du Position und Größe frei ändern.");
-        }else if(preview!=null&&preview.hasCollision()){
-            hint.setText("Die Zielposition kollidiert mit einer reservierten Fläche. Verschiebe die Rahmen, bis die rote Markierung verschwindet.");
+        }else if(preview!=null&&preview.hasPostageCollision()){
+            hint.setText("Rot: Ein verschobener Adressbereich ragt in das Porto-/DV-Feld. Verschiebe oder verkleinere den Rahmen, bevor du die Korrektur übernimmst.");
+        }else if(preview!=null&&preview.hasWindowClip()){
+            hint.setText("Rot: Ein Teil des verschobenen Adressbereichs liegt außerhalb des Brief-Sichtfensters und könnte im Umschlag abgeschnitten werden.");
         }else{
-            RectF safety=profile==null?new RectF():AddressLayoutRules.recipientSafety(profile,options);
-            hint.setText(safety.isEmpty()
-                    ?"Lege die Zielposition für den versendeten Brief fest. Der Ausschnitt zeigt bewusst nur den relevanten Adressbereich."
-                    :"Violett zeigt die zusätzliche Höhe, die ein vollständig gefülltes normales Adressfenster nach dem Verschieben für Einschreiben benötigen würde. So erkennst du vor dem Versand, ob Text außerhalb des sichtbaren Einschreibenfensters liegen könnte.");
+            RectF allowed=profile==null?new RectF():AddressLayoutRules.targetRecipient(profile,options);
+            RectF overflow=AddressLayoutRules.recipientOverflow(targetRecipient,allowed);
+            hint.setText(overflow.isEmpty()
+                    ?"Zielposition passt in Sichtfenster und Portobereich. Die Rahmen zeigen die Position, die tatsächlich in die ausgegebene PDF geschrieben wird."
+                    :"Violett: Dieser untere Teil entsteht, weil das ursprüngliche Empfängerfeld höher als der vorgesehene Zielbereich ist. Er bleibt sichtbar, solange er noch innerhalb des Brief-Sichtfensters liegt.");
         }
     }
 
