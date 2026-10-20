@@ -16,13 +16,25 @@ public final class SettingsStore {
     private SettingsStore(){}
 
     public static String appearance(Context c){
+        synchronized(AppDataTransaction.LOCK){
+            AppDataTransaction.check();
         return c.getSharedPreferences(PREF,Context.MODE_PRIVATE).getString(MODE,"system");
+    
+        }
     }
     public static void setAppearance(Context c,String mode){
+        synchronized(AppDataTransaction.LOCK){
+            AppDataTransaction.check();
         c.getSharedPreferences(PREF,Context.MODE_PRIVATE).edit().putString(MODE,mode).apply();
         applyAppearance(mode);
+    
+        }
     }
-    public static void applySavedAppearance(Context c){applyAppearance(appearance(c));}
+    public static void applySavedAppearance(Context c){
+        synchronized(AppDataTransaction.LOCK){
+            AppDataTransaction.check();applyAppearance(appearance(c));
+        }
+    }
     private static void applyAppearance(String mode){
         int value=AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM;
         if("light".equals(mode))value=AppCompatDelegate.MODE_NIGHT_NO;
@@ -31,17 +43,35 @@ public final class SettingsStore {
     }
 
     public static String palette(Context c){
+        synchronized(AppDataTransaction.LOCK){
+            AppDataTransaction.check();
         return c.getSharedPreferences(PREF,Context.MODE_PRIVATE).getString(PALETTE,"material_you");
+    
+        }
     }
     public static void setPalette(Context c,String palette){
+        synchronized(AppDataTransaction.LOCK){
+            AppDataTransaction.check();
         c.getSharedPreferences(PREF,Context.MODE_PRIVATE).edit().putString(PALETTE,palette).apply();
+    
+        }
     }
-    public static boolean materialYou(Context c){return "material_you".equals(palette(c));}
+    public static boolean materialYou(Context c){
+        synchronized(AppDataTransaction.LOCK){
+            AppDataTransaction.check();return "material_you".equals(palette(c));
+        }
+    }
     public static void applyDynamicColors(Activity activity){
+        synchronized(AppDataTransaction.LOCK){
+            AppDataTransaction.check();
         if(materialYou(activity))DynamicColors.applyToActivityIfAvailable(activity);
+    
+        }
     }
 
     public static int primary(Context c){
+        synchronized(AppDataTransaction.LOCK){
+            AppDataTransaction.check();
         if(materialYou(c))return MaterialColors.getColor(c,com.google.android.material.R.attr.colorPrimary,0xFF2457E6);
         switch(palette(c)){
             case "forest":return 0xFF287A61;
@@ -53,9 +83,13 @@ public final class SettingsStore {
             case "graphite":return 0xFF4D5562;
             default:return 0xFF2457E6;
         }
+    
+        }
     }
 
     public static int secondary(Context c){
+        synchronized(AppDataTransaction.LOCK){
+            AppDataTransaction.check();
         if(materialYou(c))return MaterialColors.getColor(c,com.google.android.material.R.attr.colorSecondary,0xFF2AC7A2);
         switch(palette(c)){
             case "forest":return 0xFF4AB985;
@@ -67,36 +101,64 @@ public final class SettingsStore {
             case "graphite":return 0xFF707985;
             default:return 0xFF1BC56C;
         }
+    
+        }
     }
 
     public static int[] gradient(Context c){
+        synchronized(AppDataTransaction.LOCK){
+            AppDataTransaction.check();
         return new int[]{primary(c),secondary(c)};
+    
+        }
     }
 
     public static boolean debugMode(Context c){
+        synchronized(AppDataTransaction.LOCK){
+            AppDataTransaction.check();
         return c.getSharedPreferences(PREF,Context.MODE_PRIVATE).getBoolean(DEBUG,false);
+    
+        }
     }
     public static void setDebugMode(Context c,boolean enabled){
+        synchronized(AppDataTransaction.LOCK){
+            AppDataTransaction.check();
         c.getSharedPreferences(PREF,Context.MODE_PRIVATE).edit().putBoolean(DEBUG,enabled).apply();
+    
+        }
     }
 
     public static String outboxFolder(Context c){
+        synchronized(AppDataTransaction.LOCK){
+            AppDataTransaction.check();
         return c.getSharedPreferences(PREF,Context.MODE_PRIVATE).getString(OUTBOX_FOLDER,"");
+    
+        }
     }
     public static void setOutboxFolder(Context c,String uri){
+        synchronized(AppDataTransaction.LOCK){
+            AppDataTransaction.check();
         c.getSharedPreferences(PREF,Context.MODE_PRIVATE).edit().putString(OUTBOX_FOLDER,uri==null?"":uri).apply();
+    
+        }
     }
 
     public static JSONObject exportJson(Context c) throws Exception{
+        synchronized(AppDataTransaction.LOCK){
+            AppDataTransaction.check();
         JSONObject o=new JSONObject();
         o.put("appearance",appearance(c));
         o.put("palette",palette(c));
         o.put("debug",debugMode(c));
         o.put("outboxFolder",outboxFolder(c));
         return o;
+    
+        }
     }
 
     public static void importJson(Context c,JSONObject o){
+        synchronized(AppDataTransaction.LOCK){
+            AppDataTransaction.check();
         if(o==null)return;
         String restoredFolder=o.optString("outboxFolder","");
         if(!restoredFolder.isBlank()){
@@ -108,12 +170,15 @@ public final class SettingsStore {
             }catch(Exception ignored){}
             if(!permitted)restoredFolder="";
         }
-        c.getSharedPreferences(PREF,Context.MODE_PRIVATE).edit()
+        boolean saved=c.getSharedPreferences(PREF,Context.MODE_PRIVATE).edit()
                 .putString(MODE,o.optString("appearance","system"))
                 .putString(PALETTE,o.optString("palette","material_you"))
                 .putBoolean(DEBUG,o.optBoolean("debug",false))
                 .putString(OUTBOX_FOLDER,restoredFolder)
-                .apply();
-        applySavedAppearance(c);
+                .commit();
+        if(!saved)throw new IllegalStateException("Einstellungen konnten nicht gespeichert werden.");
+        if(!AppDataTransaction.importing)applySavedAppearance(c);
+    
+        }
     }
 }

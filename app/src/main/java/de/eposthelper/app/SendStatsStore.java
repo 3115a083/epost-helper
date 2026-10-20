@@ -17,7 +17,9 @@ public final class SendStatsStore {
     private static final String KEY="events";
     private SendStatsStore(){}
 
-    public static synchronized List<SendStat> load(Context c){
+    public static List<SendStat> load(Context c){
+        synchronized(AppDataTransaction.LOCK){
+            AppDataTransaction.check();
         ArrayList<SendStat> out=new ArrayList<>();
         String raw=c.getSharedPreferences(PREF,Context.MODE_PRIVATE).getString(KEY,"[]");
         try{
@@ -25,17 +27,32 @@ public final class SendStatsStore {
             for(int i=0;i<a.length();i++)out.add(SendStat.fromJson(a.getJSONObject(i)));
         }catch(Exception ignored){}
         return out;
+    
+        }
     }
 
-    public static synchronized void save(Context c,List<SendStat> stats){
-        try{
-            JSONArray a=new JSONArray();
-            for(SendStat s:stats)a.put(s.toJson());
-            c.getSharedPreferences(PREF,Context.MODE_PRIVATE).edit().putString(KEY,a.toString()).apply();
-        }catch(Exception ignored){}
+    public static void save(Context c,List<SendStat> stats){
+        synchronized(AppDataTransaction.LOCK){
+            AppDataTransaction.check();
+        try { saveChecked(c,stats); } catch(Exception e) { throw new IllegalStateException("Versandstatistik konnte nicht gespeichert werden.",e); }
+    
+        }
     }
 
-    public static synchronized void record(Context c,Profile p,Uri pdf,JobOptions o){
+    public static void saveChecked(Context c,List<SendStat> stats) throws Exception{
+        synchronized(AppDataTransaction.LOCK){
+            AppDataTransaction.check();
+        JSONArray a=new JSONArray();
+        for(SendStat s:stats)a.put(s.toJson());
+        if(!c.getSharedPreferences(PREF,Context.MODE_PRIVATE).edit().putString(KEY,a.toString()).commit())
+            throw new java.io.IOException("Versandstatistik konnte nicht gespeichert werden.");
+    
+        }
+    }
+
+    public static void record(Context c,Profile p,Uri pdf,JobOptions o){
+        synchronized(AppDataTransaction.LOCK){
+            AppDataTransaction.check();
         if(p==null||o==null||DebugProfileManager.isDebug(p))return;
         SendStat s=new SendStat();
         s.profileId=p.id;s.provider=p.provider;s.registered=o.registered;s.color=o.color;s.duplex=o.duplex;s.shipping=o.shipping;
@@ -50,9 +67,13 @@ public final class SendStatsStore {
         all.removeIf(x->x.timestamp<cutoff);
         save(c,all);
         DeviceTransferStore.refresh(c);
+    
+        }
     }
 
     public static Summary summarize(Context c,Period period,List<RecentLetter> remote,String remoteProfileId,boolean useRemote){
+        synchronized(AppDataTransaction.LOCK){
+            AppDataTransaction.check();
         long[] bounds=bounds(period);
         Summary out=new Summary();
 
@@ -74,6 +95,8 @@ public final class SendStatsStore {
             }
         }
         return out;
+    
+        }
     }
 
     private static long[] bounds(Period p){

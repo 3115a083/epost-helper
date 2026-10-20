@@ -52,6 +52,8 @@ public class OutboxActivity extends AppCompatActivity {
     private TextView orderPreviewTitle;
     private TextView orderPreviewMeta;
     private Bitmap orderPreviewBitmap;
+    private long orderPreviewGeneration;
+    private boolean sendConfirmationPending;
     private final java.util.Map<String,Integer> pageCountCache=new java.util.HashMap<>();
     private boolean pageCountLoading=false;
     private int mergedPageCount=0;
@@ -369,6 +371,9 @@ public class OutboxActivity extends AppCompatActivity {
         if(orderPreviewImage==null||working.isEmpty())return;
         int index=Math.max(0,Math.min(previewIndex,working.size()-1));
         OutboxItem item=working.get(index);
+        final long generation=++orderPreviewGeneration;
+        final ImageView target=orderPreviewImage;
+        final PreviewTicket ticket=new PreviewTicket(generation,item.uri);
         orderPreviewTitle.setText(item.name);
         Integer pages=pageCountCache.get(item.uri);
         orderPreviewMeta.setText((index+1)+" / "+working.size()+" · "+(pages==null?"Seiten werden ermittelt…":pages+" Seite"+(pages==1?"":"n")));
@@ -382,7 +387,7 @@ public class OutboxActivity extends AppCompatActivity {
             try{
                 Bitmap bitmap=PdfPreviewRenderer.renderFirstPage(this,item.asUri(),900,PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
                 runOnUiThread(()->{
-                    if(orderPreviewImage==null||index!=previewIndex){
+                    if(isFinishing()||isDestroyed()||orderPreviewImage!=target||index!=previewIndex||index>=working.size()||!ticket.matches(orderPreviewGeneration,working.get(index).uri)){
                         if(!bitmap.isRecycled())bitmap.recycle();
                         return;
                     }
@@ -390,7 +395,10 @@ public class OutboxActivity extends AppCompatActivity {
                     orderPreviewImage.setImageBitmap(bitmap);
                 });
             }catch(Exception e){
-                runOnUiThread(()->DebugUtil.error(this,orderPreviewImage,"PDF-Vorschau",e));
+                runOnUiThread(()->{
+                    if(!isFinishing()&&!isDestroyed()&&orderPreviewImage==target&&index==previewIndex&&index<working.size()&&ticket.matches(orderPreviewGeneration,working.get(index).uri))
+                        DebugUtil.error(this,target,"PDF-Vorschau",e);
+                });
             }
         },"order-preview").start();
     }
@@ -977,6 +985,96 @@ public class OutboxActivity extends AppCompatActivity {
     }
 
     private void send(MaterialButton button){
+        if(sendConfirmationPending)return;
+        final Profile profile=SecureStore.find(this,selectedProfileId);
+        if(profile==null){DebugUtil.error(this,button,"Bitte ein kompatibles Profil wählen.");return;}
+        if(merged==null||!merged.exists()){DebugUtil.error(this,button,"Die vorbereitete PDF fehlt.");return;}
+        final JobOptions options=currentOptions();
+        final File document=merged;
+        final int pages=effectiveMergedPageCount();
+        final boolean individual=!mergeAsOne()&&working.size()>1&&editingPrepared==null;
+        final List<OutboxItem> sources=new ArrayList<>(working);
+        final RectF recipientArea=new RectF(sourceRecipient.isEmpty()?
+            AddressCorrectionProcessor.decode(profile.recipientWindow):sourceRecipient);
+        final String preparedName=editingPrepared==null?"Vorbereitete PDF":editingPrepared.name;
+        final String oldLabel=button.getText().toString();
+        sendConfirmationPending=true;
+        button.setEnabled(false);
+        button.setText("Versandprüfung…");
+        new Thread(()->{
+            try{
+                double cost=-1;
+                if(DebugProfileManager.isDebug(profile))cost=0;
+                else if(Profile.PROVIDER_LETTERXPRESS.equals(profile.provider)&&pages>0){
+                    if(individual){
+                        cost=0;
+                        for(OutboxItem item:sources){
+                            int count=PdfMergeUtil.countPages(this,item.asUri());
+                            if(count<=0){cost=-1;break;}
+                            cost+=LetterXpressPriceEstimator.gross(options,count);
+                        }
+                    }else cost=LetterXpressPriceEstimator.gross(options,pages);
+                }
+                String price=cost<0?"Unbekannt · vor dem Echtversand beim Anbieter prüfen":
+                    String.format(java.util.Locale.GERMANY,"ca. %.2f €",cost);
+                StringBuilder documents=new StringBuilder();
+                StringBuilder recipients=new StringBuilder();
+                if(individual){
+                    for(OutboxItem item:sources){
+                        File temporary=copyUriToTemp(item);
+                        try{
+                            String value=AddressTextExtractor.recipientKey(this,temporary,recipientArea);
+                            if(recipients.length()>0)recipients.append("\n");
+                            recipients.append(item.name).append(": ").append(value.isBlank()?"Adressvorschau prüfen":value);
+                        }finally{temporary.delete();}
+                    }
+                }else recipients.append(AddressTextExtractor.recipientKey(this,document,recipientArea));
+                for(OutboxItem item:sources){if(documents.length()>0)documents.append("\n");documents.append(item.name);}
+                if(documents.length()==0)documents.append(preparedName);
+                String details="Dokumente:\n"+documents+"\n\nSeiten: "+pages+
+                    "\nEmpfänger: "+(recipients.length()==0?"Bitte in der Adressvorschau prüfen":recipients)+
+                    "\nProfil: "+profile.name+" · "+profile.provider+
+                    "\nVersand: "+("international".equals(options.shipping)?"International":"National")+
+                    " · "+options.registered+
+                    "\nDruck: "+(options.color?"Farbe":"Schwarzweiß")+" · "+(options.duplex?"Duplex":"Einseitig")+
+                    "\nBriefe: "+(individual?sources.size():1)+
+                    "\nKosten: "+price+"\n\n"+
+                    (DebugProfileManager.isDebug(profile)?"LOKALE TESTAUSGABE · kein Versand an einen Anbieter":
+                        "ECHTVERSAND · kostenpflichtige Übermittlung");
+                runOnUiThread(()->{
+                    if(isFinishing()||isDestroyed())return;
+                    button.setEnabled(true);button.setText(oldLabel);
+                    new androidx.appcompat.app.AlertDialog.Builder(this)
+                        .setTitle(DebugProfileManager.isDebug(profile)?"Testausgabe prüfen":"Versand prüfen")
+                        .setMessage(details)
+                        .setNegativeButton("Zurück",null)
+                        .setPositiveButton(DebugProfileManager.isDebug(profile)?"Testausgabe erstellen":"Kostenpflichtig versenden",(dialog,which)->{
+                            Profile current=SecureStore.find(this,selectedProfileId);
+                            JobOptions latest=currentOptions();
+                            boolean sameProfile=false;
+                            try{sameProfile=current!=null&&profile.toJson().toString().equals(current.toJson().toString());}
+                            catch(Exception ignored){}
+                            if(!sameProfile||document!=merged||!sources.equals(working)||
+                               options.color!=latest.color||options.duplex!=latest.duplex||
+                               !options.registered.equals(latest.registered)||!options.shipping.equals(latest.shipping)||
+                               options.c4!=latest.c4||options.addressCorrection!=latest.addressCorrection){
+                                DebugUtil.error(this,button,"Versanddaten haben sich geändert. Bitte erneut prüfen.");
+                                return;
+                            }
+                            sendConfirmed(button);
+                        }).setOnDismissListener(dialog->sendConfirmationPending=false).show();
+                });
+            }catch(Exception error){
+                runOnUiThread(()->{
+                    if(isFinishing()||isDestroyed())return;
+                    sendConfirmationPending=false;button.setEnabled(true);button.setText(oldLabel);
+                    DebugUtil.error(this,button,"Versandprüfung",error);
+                });
+            }
+        },"send-review").start();
+    }
+
+    private void sendConfirmed(MaterialButton button){
         Profile p=SecureStore.find(this,selectedProfileId);
         if(p==null){DebugUtil.error(this,button,"Bitte ein kompatibles Profil wählen.");return;}
         if(merged==null||!merged.exists()){DebugUtil.error(this,button,"Die vorbereitete PDF fehlt.");return;}
