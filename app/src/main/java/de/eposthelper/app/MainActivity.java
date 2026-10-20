@@ -587,85 +587,98 @@ public class MainActivity extends AppCompatActivity {
 
     private void confirmSendAll(List<PreparedJob> jobs,MaterialButton button){
         if(jobs==null||jobs.isEmpty())return;
-        button.setEnabled(false);button.setText("Kosten werden ermittelt…");
+        final String oldLabel=button.getText().toString();
+        final List<PreparedJob> reviewJobs=new ArrayList<>();
+        try{
+            java.util.Set<String> ids=new java.util.HashSet<>();
+            for(PreparedJob job:jobs)if(ids.add(job.id))
+                reviewJobs.add(PreparedJob.fromJson(job.toJson()));
+        }catch(Exception error){DebugUtil.error(this,button,"Versandprüfung",error);return;}
+        button.setEnabled(false);button.setText("Versand wird geprüft…");
         new Thread(()->{
             double known=0d;int unknown=0;String issue=null;
+            StringBuilder summary=new StringBuilder();
+            java.util.Map<String,Profile> approvedProfiles=new java.util.HashMap<>();
             try{
-                for(PreparedJob job:jobs){
-                    Profile p=SecureStore.find(this,job.profileId);
-                    if(p==null||!ProfileCompatibility.compatible(p,job.options())){
-                        issue="Mindestens ein Brief hat kein kompatibles Versandprofil.";
-                        break;
+                for(PreparedJob job:reviewJobs){
+                    Profile profile=SecureStore.find(this,job.profileId);
+                    if(profile==null||!ProfileCompatibility.compatible(profile,job.options())){
+                        issue="Mindestens ein Brief hat kein kompatibles Versandprofil.";break;
                     }
+                    approvedProfiles.put(job.id,profile);
                     File pdf=PreparedJobStore.ensureFile(this,job);
                     int pages=PdfMergeUtil.countPages(pdf);
-                    if(DebugProfileManager.isDebug(p))continue;
-                    if(Profile.PROVIDER_LETTERXPRESS.equals(p.provider)){
-                        double price=LetterXpressPriceEstimator.gross(job.options(),pages);
-                        if(price>=0)known+=price;else unknown++;
-                    }else unknown++;
+                    boolean test=DebugProfileManager.isDebug(profile);
+                    double price=test?0:Profile.PROVIDER_LETTERXPRESS.equals(profile.provider)&&pages>0?
+                        LetterXpressPriceEstimator.gross(job.options(),pages):-1;
+                    if(price>=0)known+=price;else unknown++;
+                    if(summary.length()>0)summary.append("\n\n");
+                    summary.append(job.name).append(" · ").append(pages).append(" Seiten")
+                        .append("\nEmpfänger: ").append(job.recipientKey.isBlank()?"Adressvorschau prüfen":job.recipientKey)
+                        .append("\nProfil: ").append(profile.name).append(" · ").append(profile.provider)
+                        .append("\n").append(job.color?"Farbe":"Schwarzweiß").append(" · ")
+                        .append(job.duplex?"Duplex":"Einseitig").append(" · ").append(job.registered)
+                        .append(" · ").append("international".equals(job.shipping)?"International":"National")
+                        .append("\n").append(test?"LOKALE TESTAUSGABE":"ECHTVERSAND")
+                        .append(" · ").append(price>=0?String.format(java.util.Locale.GERMANY,"ca. %.2f €",price):"Kosten unbekannt");
                 }
-            }catch(Exception e){issue=e.getMessage()==null?"Mindestens eine vorbereitete PDF ist nicht verfügbar.":e.getMessage();}
-
-            double finalKnown=known;int finalUnknown=unknown;String finalIssue=issue;
+            }catch(Exception error){issue="Vorbereitete Dokumente konnten nicht vollständig geprüft werden.";}
+            final double finalKnown=known;
+            final int finalUnknown=unknown;
+            final String finalIssue=issue;
+            final String details=summary.toString();
             runOnUiThread(()->{
-                button.setEnabled(true);button.setText("Alle versenden");
+                if(isFinishing()||isDestroyed())return;
+                button.setEnabled(true);button.setText(oldLabel);
                 if(finalIssue!=null){
                     new com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
-                            .setTitle("Alle versenden nicht möglich")
-                            .setMessage(finalIssue+" Bitte die betroffenen Briefe zuerst prüfen.")
-                            .setPositiveButton("OK",null).show();
+                        .setTitle("Versand nicht möglich").setMessage(finalIssue+" Bitte die betroffenen Briefe zuerst prüfen.")
+                        .setPositiveButton("OK",null).show();
                     return;
                 }
-                String price;
-                if(finalKnown<=0&&finalUnknown==0)price="0,00 €";
-                else if(finalKnown>0)price=String.format(java.util.Locale.GERMANY,"ca. %.2f €",finalKnown)+(finalUnknown>0?" + unbekannte Kosten":"");
-                else price="nicht vollständig ermittelbar";
+                String price=String.format(java.util.Locale.GERMANY,"ca. %.2f €",finalKnown)
+                    +(finalUnknown>0?" + unbekannte Kosten":"");
+                boolean allTest=approvedProfiles.values().stream().allMatch(DebugProfileManager::isDebug);
                 new com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
-                        .setTitle("Alle Briefe versenden?")
-                        .setMessage(jobs.size()+" vorbereitete Briefe werden jetzt versendet.\n\nVoraussichtliche Kosten: "+price)
-                        .setNegativeButton("Abbrechen",null)
-                        .setPositiveButton("Alle versenden",(d,w)->sendAllPrepared(new ArrayList<>(jobs),button))
-                        .show();
+                    .setTitle("Versandprüfung")
+                    .setMessage(details+"\n\nGesamt: "+price)
+                    .setNegativeButton("Zurück",null)
+                    .setPositiveButton(allTest?"Testausgabe erstellen":"Kostenpflichtig versenden",
+                        (dialog,which)->sendAllPrepared(reviewJobs,approvedProfiles,button))
+                    .show();
             });
-        },"queue-estimate").start();
+        },"queue-review").start();
     }
 
-    private void sendAllPrepared(List<PreparedJob> jobs,MaterialButton button){
-        button.setEnabled(false);button.setText("Alle werden versendet…");
+    private void sendAllPrepared(List<PreparedJob> jobs,java.util.Map<String,Profile> approvedProfiles,MaterialButton button){
+        button.setEnabled(false);button.setText("Versand läuft…");
         new Thread(()->{
-            int sent=0,failed=0;
+            int sent=0,tested=0,failed=0;
             for(PreparedJob job:jobs){
                 try{
-                    PreparedJobSender.send(this,job);
-                    deletePreparedSources(job);
-                    PreparedJobStore.delete(this,job.id);
-                    sent++;
-                }catch(Exception e){failed++;}
+                    Profile approved=approvedProfiles.get(job.id);
+                    Profile current=SecureStore.find(this,job.profileId);
+                    if(approved==null||current==null||!approved.toJson().toString().equals(current.toJson().toString()))
+                        throw new IllegalStateException("Versandprofil wurde geändert.");
+                    PreparedJobSender.send(this,job,approved);
+                    boolean real=PreparedJobCompletion.finish(approved,
+                        ()->deletePreparedSources(job),()->PreparedJobStore.delete(this,job.id));
+                    if(real)sent++;else tested++;
+                }catch(Exception error){failed++;}
             }
-            int finalSent=sent,finalFailed=failed;
+            final int finalSent=sent,finalTested=tested,finalFailed=failed;
             runOnUiThread(()->{
+                if(isFinishing()||isDestroyed())return;
                 render();
-                Snackbar.make(content,finalFailed==0
-                        ?finalSent+" Briefe erfolgreich übergeben."
-                        :finalSent+" Briefe versendet, "+finalFailed+" fehlgeschlagen. Fehlgeschlagene Briefe bleiben im Ausgang.",
-                        Snackbar.LENGTH_LONG).show();
+                Snackbar.make(content,finalSent+" Briefe übergeben, "+finalTested+" lokale Testausgaben, "+
+                    finalFailed+" fehlgeschlagen. Testaufträge und fehlgeschlagene Briefe bleiben im Ausgang.",
+                    Snackbar.LENGTH_LONG).show();
             });
-        },"send-all-prepared").start();
+        },"send-reviewed-jobs").start();
     }
 
     private void sendPrepared(PreparedJob job,MaterialButton button){
-        button.setEnabled(false);button.setText("Wird gesendet…");
-        new Thread(()->{
-            try{
-                PreparedJobSender.send(this,job);
-                deletePreparedSources(job);
-                PreparedJobStore.delete(this,job.id);
-                runOnUiThread(()->{Snackbar.make(content,"Brief erfolgreich übergeben.",Snackbar.LENGTH_LONG).show();render();});
-            }catch(Exception e){
-                runOnUiThread(()->{button.setEnabled(true);button.setText("Senden");DebugUtil.error(this,button,"Ausgang versenden",e);});
-            }
-        },"prepared-send").start();
+        confirmSendAll(java.util.Collections.singletonList(job),button);
     }
 
     private void deletePreparedSources(PreparedJob job){

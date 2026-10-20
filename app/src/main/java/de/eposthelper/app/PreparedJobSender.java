@@ -8,8 +8,12 @@ public final class PreparedJobSender {
     private PreparedJobSender(){}
 
     public static void send(Context c,PreparedJob job) throws Exception{
-        Profile p=SecureStore.find(c,job.profileId);
+        send(c,job,SecureStore.find(c,job.profileId));
+    }
+
+    static void send(Context c,PreparedJob job,Profile p) throws Exception{
         if(p==null)throw new IllegalStateException("Versandprofil nicht mehr vorhanden.");
+        if(!p.id.equals(job.profileId))throw new IllegalStateException("Versandprofil passt nicht zum Auftrag.");
         File source=PreparedJobStore.ensureFile(c,job);
         File corrected=null;
         try{

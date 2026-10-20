@@ -14,6 +14,8 @@ public final class DeviceTransferStore {
     private DeviceTransferStore(){}
 
     public static void refresh(Context c){
+        synchronized(AppDataTransaction.LOCK){
+            AppDataTransaction.check();
         try{
             JSONObject root=new JSONObject();
             root.put("settings",SettingsStore.exportJson(c));
@@ -34,9 +36,13 @@ public final class DeviceTransferStore {
 
             c.getSharedPreferences(PREF,Context.MODE_PRIVATE).edit().putString(KEY,root.toString()).apply();
         }catch(Exception ignored){}
+    
+        }
     }
 
     public static void restoreIfNeeded(Context c){
+        synchronized(AppDataTransaction.LOCK){
+            AppDataTransaction.check();
         if(c.getSharedPreferences(PREF,Context.MODE_PRIVATE).getBoolean(RESTORED,false))return;
         String raw=c.getSharedPreferences(PREF,Context.MODE_PRIVATE).getString(KEY,"");
         if(raw.isBlank())return;
@@ -61,5 +67,7 @@ public final class DeviceTransferStore {
             SettingsStore.importJson(c,root.optJSONObject("settings"));
             c.getSharedPreferences(PREF,Context.MODE_PRIVATE).edit().putBoolean(RESTORED,true).apply();
         }catch(Exception ignored){}
+    
+        }
     }
 }

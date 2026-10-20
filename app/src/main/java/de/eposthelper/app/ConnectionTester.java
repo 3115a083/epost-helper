@@ -70,7 +70,7 @@ public final class ConnectionTester {
             String path=new URI(href).getPath();
             if(path==null||path.equals(basePath)||path.equals(basePath.endsWith("/")?basePath.substring(0,basePath.length()-1):basePath))continue;
             String relative=path.startsWith(basePath)?path.substring(basePath.length()):path;
-            relative=URLDecoder.decode(relative,StandardCharsets.UTF_8).replaceAll("^/+|/+$","");
+            relative=URLDecoder.decode(relative,StandardCharsets.UTF_8.name()).replaceAll("^/+|/+$","");
             if(!relative.isBlank()&&!relative.contains("/")&&!result.contains(relative))result.add(relative);
         }
         return result;

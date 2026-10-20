@@ -28,6 +28,10 @@ public final class AppBackupManager {
     private AppBackupManager(){}
 
     public static void exportTo(Context c,Uri uri,char[] password) throws Exception{
+        synchronized(AppDataTransaction.LOCK){exportLocked(c,uri,password);}
+    }
+
+    private static void exportLocked(Context c,Uri uri,char[] password) throws Exception{
         if(password==null||password.length<6)throw new IllegalArgumentException("Das Backup-Passwort muss mindestens 6 Zeichen lang sein.");
         JSONObject root=new JSONObject();
         root.put("format",1);
@@ -42,12 +46,15 @@ public final class AppBackupManager {
         for(SendStat s:SendStatsStore.load(c))stats.put(s.toJson());
         root.put("stats",stats);
 
+        BackupPayload.parse(root.toString());
         byte[] salt=new byte[16],iv=new byte[12];
         SecureRandom rnd=new SecureRandom();rnd.nextBytes(salt);rnd.nextBytes(iv);
         SecretKeySpec key=derive(password,salt);
         Cipher cipher=Cipher.getInstance("AES/GCM/NoPadding");
         cipher.init(Cipher.ENCRYPT_MODE,key,new GCMParameterSpec(128,iv));
-        byte[] ct=cipher.doFinal(root.toString().getBytes(StandardCharsets.UTF_8));
+        byte[] plain=root.toString().getBytes(StandardCharsets.UTF_8);
+        if(plain.length>BackupPayload.MAX_BYTES-MAGIC.length-16-12-16)throw new IllegalArgumentException("Backup ist größer als 8 MiB.");
+        byte[] ct=cipher.doFinal(plain);
 
         try(OutputStream out=c.getContentResolver().openOutputStream(uri,"w")){
             if(out==null)throw new IllegalStateException("Backup-Datei konnte nicht geöffnet werden.");
@@ -73,24 +80,15 @@ public final class AppBackupManager {
         try{plain=cipher.doFinal(ct);}
         catch(Exception e){throw new IllegalArgumentException("Backup-Passwort falsch oder Datei beschädigt.");}
 
-        JSONObject root=new JSONObject(new String(plain,StandardCharsets.UTF_8));
-        SettingsStore.importJson(c,root.optJSONObject("settings"));
-
-        ArrayList<Profile> profiles=new ArrayList<>();
-        JSONArray pa=root.optJSONArray("profiles");
-        if(pa!=null)for(int i=0;i<pa.length();i++){
-            JSONObject o=pa.optJSONObject(i);if(o!=null)profiles.add(Profile.fromJson(o));
-        }
-        SecureStore.save(c,profiles);
-
-        ArrayList<SendStat> stats=new ArrayList<>();
-        JSONArray sa=root.optJSONArray("stats");
-        if(sa!=null)for(int i=0;i<sa.length();i++){
-            JSONObject o=sa.optJSONObject(i);if(o!=null)stats.add(SendStat.fromJson(o));
-        }
-        SendStatsStore.save(c,stats);
-        DebugProfileManager.ensure(c);
+        BackupPayload prepared=BackupPayload.parse(new String(plain,StandardCharsets.UTF_8));
+        AppDataTransaction.replace(c,()->{
+            SecureStore.save(c,prepared.profiles);
+            SendStatsStore.saveChecked(c,prepared.stats);
+            SettingsStore.importJson(c,prepared.settings);
+            DebugProfileManager.ensure(c);
+        });
         DeviceTransferStore.refresh(c);
+        SettingsStore.applySavedAppearance(c);
     }
 
     private static SecretKeySpec derive(char[] password,byte[] salt) throws Exception{
@@ -101,10 +99,8 @@ public final class AppBackupManager {
     }
 
     private static byte[] readAll(Context c,Uri uri) throws Exception{
-        try(InputStream in=c.getContentResolver().openInputStream(uri);ByteArrayOutputStream out=new ByteArrayOutputStream()){
-            if(in==null)throw new IllegalStateException("Backup-Datei konnte nicht geöffnet werden.");
-            byte[] buf=new byte[32*1024];int n;while((n=in.read(buf))!=-1)out.write(buf,0,n);
-            return out.toByteArray();
+        try(InputStream in=c.getContentResolver().openInputStream(uri)){
+            return BackupPayload.readBounded(in);
         }
     }
 }
