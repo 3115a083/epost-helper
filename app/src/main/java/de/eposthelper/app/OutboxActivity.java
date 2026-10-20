@@ -480,7 +480,7 @@ public class OutboxActivity extends AppCompatActivity {
                 runOnUiThread(()->{
                     if(merged!=null&&merged.exists())merged.delete();
                     if(previewBitmap!=null&&!previewBitmap.isRecycled())previewBitmap.recycle();
-        if(orderPreviewBitmap!=null&&!orderPreviewBitmap.isRecycled())orderPreviewBitmap.recycle();
+                    if(orderPreviewBitmap!=null&&!orderPreviewBitmap.isRecycled())orderPreviewBitmap.recycle();
                     merged=next;previewBitmap=bitmap;mergedPageCount=pages;
                     if(advance){step=3;renderStep();}
                     else if(step==2)renderStep();
